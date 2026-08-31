@@ -1,0 +1,64 @@
+[workspace]
+members = ["luajit-modules"]
+
+[package]
+name = "cindex"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "*"
+bstr = "*"
+clap = { version = "4", features = ["derive"] }
+compact_str = { version = "*", features = ["smallvec", "serde"] }
+either = "*"
+emojis = "*"
+fern = "*"
+icu_casemap = "2.3"
+icu_collections = "2.3"
+icu_properties = "2.3"
+indexmap = "2"
+itoa = "*"
+log = "*"
+luajit-modules = { path = "./luajit-modules" }
+memchr = "*"
+mlua_derive = { version = "*", features = ["macros"] }
+mlua = { version = "0.12", features = ["luajit", "vendored", "anyhow", "macros"] }
+modular-bitfield = "*"
+pcre2-sys = "0.2.10"
+phf = { version = "*", features = ["macros"] }
+regex = { version = "*" }
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+smallvec = { version = "1", features = ["const_generics"] }
+unicode-segmentation  = "*"
+rustc-hash = "*"
+
+[dev-dependencies]
+criterion = "*"
+xript-runtime = "0.7"
+
+[build-dependencies]
+itoa = "*"
+icu_normalizer = "*"
+modular-bitfield = "*"
+
+[[bench]]
+name = "readings_map"
+harness = false
+
+[[bench]]
+name = "get_han_info"
+harness = false
+
+[[bench]]
+name = "lua_ffi_cast"
+harness = false
+
+[[bench]]
+name = "lua_ffi_cast2"
+harness = false
+
+[[bench]]
+name = "lua_ffi_agg_type"
+harness = false
