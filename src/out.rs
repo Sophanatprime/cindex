@@ -635,7 +635,7 @@ pub fn luaopen_cindex_table(lua: &Lua, _: ()) -> LuaResult<LuaTable> {
 
     let len = han::MAX_RADICAL.0 as usize;
     let kx_to_chars = lua.create_table_with_capacity(len, len)?;
-    for n in 0..han::MAX_RADICAL.0 {
+    for n in 1..=han::MAX_RADICAL.0 {
         s.clear();
         s.push_str("BuShou");
         s.push_str(buf.format(n));

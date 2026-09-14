@@ -164,6 +164,8 @@ impl FromLua for IndexEntry {
                     }
                 }
             }
+        } else if pages_val == LuaNil {
+            // nop
         } else {
             return err_fn(format!("expect table for pages"));
         };
@@ -264,6 +266,7 @@ impl IntoLua for &MergedEntry {
                         t.raw_set(1, text.as_str())?;
                     }
                 }
+                levels.raw_push(t)?;
             }
             table.raw_set("levels", levels)?;
         }
@@ -330,6 +333,7 @@ impl IntoLua for &MergedEntry {
                         t.raw_set("end_raw", end.1.as_str())?;
                     }
                 }
+                pages.raw_push(t)?;
             }
             table.raw_set("pages", pages)?;
         }

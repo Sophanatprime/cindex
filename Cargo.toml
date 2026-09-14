@@ -8,7 +8,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "*"
-bstr = "*"
+bstr = { version = "*", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 compact_str = { version = "*", features = ["smallvec", "serde"] }
 either = "*"
@@ -22,8 +22,9 @@ itoa = "*"
 log = "*"
 luajit-modules = { path = "./luajit-modules" }
 memchr = "*"
+mimalloc = "*"
 mlua_derive = { version = "*", features = ["macros"] }
-mlua = { version = "0.12", features = ["luajit", "vendored", "anyhow", "macros"] }
+mlua = { version = "0.12", features = ["luajit", "vendored", "anyhow", "macros", "serde"] }
 modular-bitfield = "*"
 pcre2-sys = "0.2.10"
 phf = { version = "*", features = ["macros"] }
@@ -33,6 +34,12 @@ serde_json = "*"
 smallvec = { version = "1", features = ["const_generics"] }
 unicode-segmentation  = "*"
 rustc-hash = "*"
+
+hex = "*"
+digest = "*"
+"md-5" = "*"
+"sha2" = "*"
+"blake2" = "*"
 
 [dev-dependencies]
 criterion = "*"

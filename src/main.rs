@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::bail;
+use anyhow::{Context, anyhow, bail};
 use cindex::{
     IstFile, PagePrecedenceProvider,
     ffi::lua::prelude::{IntoLua, LuaFunction, LuaNil, LuaString, LuaTable, LuaValue},
@@ -13,7 +13,22 @@ use clap::{Parser, Subcommand, ValueEnum};
 use compact_str::CompactString;
 use rustc_hash::FxHashMap;
 
+use mimalloc::MiMalloc;
+use serde::Serializer;
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+fn panic_handler(info: &std::panic::PanicHookInfo) {
+    match info.payload_as_str() {
+        Some(s) => println!("cindex raised an ERROR: {}", s),
+        None => println!("cindex raised an ERROR."),
+    }
+    std::process::exit(1)
+}
+
 fn main() {
+    std::panic::set_hook(Box::new(panic_handler));
+
     let timer = std::time::Instant::now();
     let cli = Cli::parse();
 
@@ -21,35 +36,45 @@ fn main() {
         out.finish(format_args!("[{}] {}", record.level(), message))
     });
     if cli.command.is_some() {
-        logger
-            .level(log::LevelFilter::Warn)
-            .chain(std::io::stderr())
-            .apply()
-            .unwrap();
+        if !cli.quiet {
+            logger
+                .level(log::LevelFilter::Warn)
+                .chain(std::io::stderr())
+                .apply()
+                .unwrap();
+        }
     } else {
-        logger = logger
-            .level(log::LevelFilter::Info)
-            .chain(std::io::stderr());
+        if cli.quiet {
+            logger = logger.level(log::LevelFilter::Info);
+        } else {
+            logger = logger
+                .level(log::LevelFilter::Info)
+                .chain(std::io::stderr());
+        }
 
         if let Some(log_file) = &cli.log_file {
             logger = logger.chain(std::fs::File::create(log_file).unwrap());
         } else if cli.input_files.is_empty() {
-            log::info!(target: "cindex", "No input file is given.");
+            // pass
         } else {
             let mut log_file = Path::new(&cli.input_files[0]);
             log_file = Path::new(log_file.file_name().unwrap());
-            log_file.with_extension("ilg");
-            logger = logger.chain(std::fs::File::create(log_file).unwrap());
+            logger = logger.chain(std::fs::File::create(log_file.with_extension("ilg")).unwrap());
         };
 
         logger.apply().unwrap();
     }
 
     log::info!(
-        "This is cindex, version {} {}. Copyright Wenjian Chern<longaster@163.com>",
+        "This is cindex, version {} {}. Copyright 2026 Wenjian Chern<longaster@163.com>",
         env!("CARGO_PKG_VERSION"),
         "2026-08-31"
     );
+
+    if cli.license {
+        print_license();
+        std::process::exit(0)
+    }
 
     if let Some(sub) = &cli.command {
         match sub {
@@ -71,7 +96,7 @@ fn main() {
         }
     }
 
-    log::info!("Total times: {}ms", timer.elapsed().as_millis());
+    log::info!("Completed in {}ms", timer.elapsed().as_millis());
 }
 
 fn normalize_unicode_escape(mut s: &str) -> std::borrow::Cow<'_, str> {
@@ -89,8 +114,9 @@ fn normalize_unicode_escape(mut s: &str) -> std::borrow::Cow<'_, str> {
         if s.as_bytes()[0] == b'{' {
             match memchr::memchr(b'}', s.as_bytes()) {
                 Some(idx) => {
-                    let n = u32::from_str_radix(&s[1..idx], 16).unwrap();
-                    res.push(char::from_u32(n).unwrap());
+                    let n = u32::from_str_radix(&s[1..idx], 16)
+                        .expect(&format!("invalid number: {}", &s[1..idx]));
+                    res.push(char::from_u32(n).expect(&format!("invalid char: U+{:04X}", n)));
                     s = &s[idx + 1..];
                 }
                 None => {
@@ -100,8 +126,9 @@ fn normalize_unicode_escape(mut s: &str) -> std::borrow::Cow<'_, str> {
                 }
             }
         } else {
-            let n = u32::from_str_radix(&s[..4.min(s.len())], 16).unwrap();
-            res.push(char::from_u32(n).unwrap());
+            let n = u32::from_str_radix(&s[..4.min(s.len())], 16)
+                .expect(&format!("invalid number: {}", &s[..4.min(s.len())]));
+            res.push(char::from_u32(n).expect(&format!("invalid char: U+{:04X}", n)));
             s = &s[4.min(s.len())..];
         }
     }
@@ -132,11 +159,6 @@ pub struct Cli {
     /// file <idx0> with the extension .ind.
     #[arg(short = 'o', long = "output", value_name = "ind")]
     pub output: Option<String>,
-
-    /// Quiet mode. Suppress progress and informational messages on standard error (stderr).
-    /// By default, processing messages and errors are output to both stderr and the log file.
-    #[arg(short = 'q', long = "quiet")]
-    pub quiet: bool,
 
     /// Disable implicit page range formation.
     /// When set, page ranges must be generated using explicit range operators.
@@ -172,7 +194,7 @@ pub struct Cli {
     #[arg(short = 'z', long = "sorts", verbatim_doc_comment)]
     pub sorts: Option<String>,
 
-    /// Treat the input files as key–value index format (cindex-specific).
+    /// Treat the input files as ikv format (cindex-specific).
     #[arg(long = "kv")]
     pub kv_format: bool,
 
@@ -183,6 +205,15 @@ pub struct Cli {
 
     #[arg(last = true)]
     pub extras: Vec<String>,
+
+    /// Quiet mode. Suppress progress and informational messages on stderr.
+    /// By default, processing messages and errors are output to both stderr and the log file.
+    #[arg(short = 'q', long = "quiet", global = true)]
+    pub quiet: bool,
+
+    /// Print license information for cindex and all bundled components, then exit.
+    #[arg(long = "license", global = true)]
+    pub license: bool,
 
     /// Subcommands for querying character data.
     #[command(subcommand)]
@@ -222,6 +253,23 @@ pub enum QueryKind {
     #[value(alias = "bihua")]
     StrokesName,
     StrokesDigit,
+}
+
+fn print_license() {
+    const LICENSE_INFO: &str = "\
+cindex\tGNU Lesser General Public License v2.1 or later
+\thttps://github.com/Sophanatprime/cindex/LICENSE
+lpeg-1.1.0\tMIT LICENSE
+\thttps://www.inf.puc-rio.br/~roberto/lpeg/#license
+Unicode Data\tUnicode License v3
+\thttps://www.unicode.org/license.txt
+Unihan Data\tUnicode License v3
+\thttps://www.unicode.org/license.txt
+ids(ts.txt)\tMIT License
+\thttps://github.com/yi-bai/ids/blob/main/LICENSE
+StrokeOrder.txt\thttps://github.com/CNMan/UnicodeCJK-WuBi/
+";
+    print!("{}", LICENSE_INFO);
 }
 
 fn process_query(kind: &QueryKind, text: &str) {
@@ -324,7 +372,14 @@ fn process_query(kind: &QueryKind, text: &str) {
 }
 
 fn process_make_index(args: &Cli) -> anyhow::Result<()> {
-    let ist_path = args.style.as_ref().map(|s| Path::new(s).to_path_buf());
+    let ist_path = args.style.as_ref().map(|s| {
+        let p = Path::new(s);
+        if matches!(p.extension(), None) {
+            p.with_extension("ist")
+        } else {
+            p.to_path_buf()
+        }
+    });
     let ist_path_handle = std::thread::spawn(move || {
         ist_path.and_then(|p| {
             if p.exists() {
@@ -332,7 +387,7 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
             } else {
                 Some(PathBuf::from(
                     cindex::ffi::kpse_find_file(&p, false)
-                        .expect("unable to execute kpsewhich")
+                        .expect(&format!("unable to find style file: {}", p.display()))
                         .expect(&format!("unable to find style file: {}", p.display())),
                 ))
             }
@@ -346,19 +401,22 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
         let tx = tx.clone();
         let path = PathBuf::from(p);
         let handler = std::thread::spawn(move || {
-            let v = if path.exists() {
-                (idx, path)
+            if path.exists() {
+                tx.send((idx, path)).unwrap();
+            } else if path.extension().is_none() {
+                let real_path = match cindex::ffi::kpse_find_file(&path, false) {
+                    Ok(Some(path)) => path,
+                    _ => cindex::ffi::kpse_find_file(path.with_extension("idx"), false)
+                        .expect(&format!("unable to find input file: {}", path.display()))
+                        .expect(&format!("unable to find input file: {}", path.display())),
+                };
+                tx.send((idx, PathBuf::from(real_path))).unwrap();
             } else {
-                (
-                    idx,
-                    PathBuf::from(
-                        cindex::ffi::kpse_find_file(&path, false)
-                            .expect("unable to execute kpsewhich")
-                            .expect(&format!("unable to find input file: {}", path.display())),
-                    ),
-                )
-            };
-            tx.send(v).unwrap()
+                let real_path = cindex::ffi::kpse_find_file(&path, false)
+                    .expect(&format!("unable to find input file: {}", path.display()))
+                    .expect(&format!("unable to find input file: {}", path.display()));
+                tx.send((idx, PathBuf::from(real_path))).unwrap();
+            }
         });
         input_handles.push(handler);
     }
@@ -390,7 +448,7 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
         for _ in 0..input_handles.len() {
             let (idx, path) = rx
                 .recv()
-                .expect("thread raised an error when find input files");
+                .with_context(|| anyhow!("thread raised an error when find input files"))?;
             input[idx] = path;
         }
 
@@ -425,7 +483,7 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
         .join()
         .expect("unable to execute kpsewhich")
         .map(|path| {
-            if matches!(path.extension(), Some(p) if p.to_str() == Some("lua")) {
+            if matches!(path.extension(), Some(p) if matches!(p.to_str(), Some("lua") | Some("cilua") )) {
                 (IstFile::default(), Some(path.to_string_lossy().to_string()))
             } else {
                 (
@@ -489,6 +547,30 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
                 lua.create_string(s.as_bytes()).map(LuaValue::String)
             })?,
         )?;
+        c_funcs_api.raw_set(
+            "table_to_json",
+            lua.create_function::<_, LuaTable, Value>(|lua, tab| {
+                let Ok(json_text) = serde_json::to_string_pretty(&tab) else {
+                    return Err(cindex::ffi::lua::Error::SerializeError(format!(
+                        "erroneous calling table.to_json"
+                    )));
+                };
+                lua.create_string(json_text.as_bytes())
+                    .map(LuaValue::String)
+            })?,
+        )?;
+        c_funcs_api.raw_set(
+            "value_from_json",
+            lua.create_function::<_, LuaString, Value>(|lua, tab| {
+                let ser = cindex::ffi::lua::serde::ser::Serializer::new(lua);
+                let Ok(value) = ser.serialize_bytes(&tab.as_bytes()) else {
+                    return Err(cindex::ffi::lua::Error::SerializeError(format!(
+                        "erroneous calling value_from_json"
+                    )));
+                };
+                Ok(value)
+            })?,
+        )?;
         lua.globals().raw_set("__c_function_api", c_funcs_api)?;
 
         let cli_options = lua.create_table()?;
@@ -517,7 +599,7 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
     let mut entries = Vec::<cindex::IndexEntry>::new();
     let read_indices: LuaFunction = lua.globals().raw_get("__cindex_read_indices")?;
     for (p, f) in &idx_string {
-        let (p, is_ikv) = match p {
+        let (p, ext_ikv) = match p {
             Some(p) => {
                 let path = p
                     .to_string_lossy()
@@ -536,7 +618,7 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
             .call::<()>((
                 p,
                 &f as *const _ as i64,
-                is_ikv,
+                args.kv_format | ext_ikv,
                 &mut entries as *mut _ as i64,
             ))
             .inspect_err(|e| {

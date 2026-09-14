@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, ffi::*, ptr::null};
 
-use crate::{MergedEntry, style::*};
+use crate::style::*;
 use bstr::{BStr, ByteSlice};
 
 #[repr(C)]
@@ -65,7 +65,6 @@ pub struct Api {
         unsafe extern "C" fn(*const IstInputStyle, *mut Vec<IndexEntry>, *const StrRef) -> bool,
     pub ikv_input_read_all:
         unsafe extern "C" fn(*const IstInputStyle, *mut Vec<IndexEntry>, *const StrRef) -> bool,
-    pub compare: unsafe extern "C" fn(*const MergedEntry, *const MergedEntry) -> c_int,
     pub write_to_output: unsafe extern "C" fn(*mut Writer, *const u8, usize) -> bool,
     pub log: unsafe extern "C" fn(u8, *const u8, usize) -> bool,
     pub ist_input: *const IstInputStyle,
@@ -84,7 +83,6 @@ impl Default for Api {
         Api {
             idx_input_read_all,
             ikv_input_read_all,
-            compare,
             write_to_output,
             log,
             ist_input: null(),
@@ -207,25 +205,6 @@ pub unsafe extern "C" fn ikv_input_read_all(
         blocks, ok_lines, err_lines
     );
     true
-}
-
-unsafe extern "C" fn compare(entry1: *const MergedEntry, entry2: *const MergedEntry) -> i32 {
-    let entry1 = unsafe { &*entry1 };
-    let entry2 = unsafe { &*entry2 };
-    for (e1, e2) in entry1.levels.iter().zip(&entry2.levels) {
-        let s1 = e1.0.as_ref().unwrap_or(&e1.1);
-        let s2 = e2.0.as_ref().unwrap_or(&e2.1);
-        match s1.cmp(&s2) {
-            Ordering::Less => return -1,
-            Ordering::Equal => continue,
-            Ordering::Greater => return 1,
-        }
-    }
-    match entry1.levels.len().cmp(&entry2.levels.len()) {
-        Ordering::Less => return -1,
-        Ordering::Equal => return 0,
-        Ordering::Greater => return 1,
-    }
 }
 
 unsafe extern "C" fn write_to_output(buf: *mut Writer, ptr: *const u8, len: usize) -> bool {
@@ -1396,7 +1375,7 @@ mod index {
                     return 1;
                 }
                 MergedPage::Range { start, end, .. } => {
-                    if start.0.is_empty() {
+                    if start.0.is_empty() || end.0.is_empty() {
                         return 0;
                     }
                     return (1 + end.0.last().unwrap().value - start.0.last().unwrap().value) as _;
@@ -1600,7 +1579,7 @@ mod data {
 
     pub unsafe extern "C" fn han_ordered_strokes(c: u32, out: *mut OrderedStrokes) -> bool {
         unsafe {
-            let Some(c) = char::from_u32(c).and_then(|c| ordered_strokes(c)) else {
+            let Some(c) = char::from_u32(c).and_then(ordered_strokes) else {
                 return false;
             };
             (*out).ptr = c.0.as_ptr();
@@ -1647,7 +1626,7 @@ mod data {
             let Some(s) = StrRef { ptr, len }.as_str() else {
                 return -2;
             };
-            if s.chars().any(|c| c < '1' && c > '5') {
+            if s.chars().any(|c| c < '1' || c > '5') {
                 return -2;
             }
             let OrderedStrokes { ptr, len } = *ordered_strokes;

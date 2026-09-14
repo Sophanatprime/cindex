@@ -1,0 +1,176 @@
+local string_buffer = require "string.buffer";
+local digest = require "digest";
+
+local table_to_json = CIndex.Util.table_to_json_string;
+
+local function display(value)
+    local ty = type(value);
+    local s = "";
+    if ty == "function" then
+        s = "function ..";
+    elseif ty == "table" then
+        s = table_to_json(value);
+    elseif ty == "string" then
+        s = value;
+    else
+        s = tostring(value);
+    end
+
+    local i = 0;
+    if #s > 0 then
+        for _ in StrRef.unsafe_new(s):lines() do
+            i = i + 1;
+        end
+    end
+    return tostring(i) .. ".\n" .. s;
+end
+
+local function compile(code, path, env)
+    local f, err = loadstring(code, path);
+    if f then
+        setfenv(f, env);
+        return f;
+    else
+        return nil, err;
+    end
+end
+local function pack(...)
+    return { n = select("#", ...), ... };
+end
+local function exec_luacode(code, path, env)
+    local chunk, err = compile(code, path, env);
+
+    local lines = {}
+    local saved_print = env.print;
+    env.print = function(...)
+        local n = select("#", ...);
+        local parts = {};
+        for i = 1, n do
+            parts[i] = tostring((select(i, ...)));
+        end
+        lines[#lines + 1] = table.concat(parts, "\t");
+    end
+
+    if not chunk then
+        return false, "syntax error: " .. tostring(err);
+    end
+
+    local res = pack(xpcall(chunk, function(e)
+        return tostring(e)
+    end));
+
+    env.print = saved_print;
+
+    if not res[1] then
+        lines[#lines + 1] = "error: " .. tostring(res[2]);
+        return false, table.concat(lines, "\n");
+    end
+
+    if res.n > 1 then
+        local parts = {};
+        for i = 2, res.n do
+            parts[#parts + 1] = tostring(res[i]);
+        end
+        if not (#parts == 1 and parts[1] == "nil") then
+            lines[#lines + 1] = table.concat(parts, "\t");
+        end
+    end
+
+    return true, table.concat(lines, "\n");
+end
+
+local function new_env()
+    local env = setmetatable({}, { __index = _G });
+    env._G = env;
+    return env;
+end
+
+local function parse_indices_string(file_path, lines, _is_ikv)
+    local lines_f = lines:lines();
+    local g_envs = {};
+    local function read_lines ()
+        local line = lines_f();
+        if line == nil then
+            return nil;
+        end
+
+        local res = IndexEntryRefMut();
+        local id, len, name;
+        for part in line:split(",") do
+            if name then
+                Logger.warn("extra part: " .. tostring(part));
+                break;
+            end
+            if id then
+                if len then
+                    name = part;
+                else
+                    len = part;
+                end
+            else
+                id = part;
+            end
+        end
+
+        if not name then
+            -- error("missing name for luarun");
+            name = id;
+        elseif name:is_empty() then
+            name = id;
+        end
+
+        name = tostring(name);
+        local from_s, from_e = name:find(": ");
+        local env_from = "";
+        if from_e then
+            env_from = name:sub(from_e + 1);
+            name = name:sub(1, from_s - 1);
+        end
+
+        len = tonumber(tostring(len));
+        local lua_code = string_buffer.new();
+        for _ = 1, len do
+            lua_code:put(lines_f());
+            lua_code:put('\n');
+        end
+
+        id = tostring(id);
+        lua_code = tostring(lua_code);
+        assert(res:push_level(id, id));
+        assert(res:push_level(name, name));
+
+        local ok, eval_res = exec_luacode(lua_code, name, g_envs[env_from] or new_env());
+        if not ok then error(eval_res) end
+        assert(res:push_level(digest.md5(eval_res), display(eval_res)));
+        return res;
+    end;
+
+    local index = 0;
+    return function ()
+        index = index + 1;
+        local ok, res = pcall(read_lines);
+        if ok then
+            return res;
+        else
+            Logger.error("error on block " .. tostring(index) .. ": " .. tostring(res));
+            return false;
+        end
+    end;
+end
+
+
+return {
+    parse_indices_string = parse_indices_string,
+    group_detect = function (entry)
+        return "nil";
+    end,
+    output_style = {
+        preamble = "",
+        postamble = "",
+        headings_flag = 0,
+        item_0 = "\\luacoderesult{",
+        item_x1 = "}{",
+        item_x2 = "}=",
+        delim_2 = "\n",
+    },
+};

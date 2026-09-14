@@ -1,0 +1,600 @@
+\ProvidesExplPackage{cindexdoc}{2026-09-01}{v1.0.0}{cindex doc}
+
+\keys_define:nn { cndd/options }
+  {
+    luarun .bool_set:N = \l__cndd_luarun_bool ,
+    luarun-file .tl_set:N = \l__cndd_luarun_tl ,
+    luarun-file .initial:n = { \c_sys_jobname_str . luarun . cilua } ,
+    luarun-output .tl_set:N = \l__cndd_luarun_out_tl ,
+    luarun-output .initial:n = { \c_sys_jobname_str .luarun . ciout } ,
+  }
+\ProcessKeyOptions [ cndd/options ]
+
+\cs_new_protected:Npn \__cndd_verbatim_font_hook:
+  { \protected\def\CJKglue{} \protected\def\CJKecglue{} }
+\sys_if_engine_xetex:T
+  {
+    \cs_set_protected:Npn \__cndd_verbatim_font_hook:
+      { \xeCJKsetup { CJKglue = , CJKecglue = } }
+  }
+\sys_if_engine_luatex:T
+  {
+    \cs_set_protected:Npn \__cndd_verbatim_font_hook:
+      { \ltjsetparameter { autospacing = false , autoxspacing = false } }
+  }
+
+\newenvironment{typelua}
+  {\list{}{%
+      \leftmargin\z@ \itemindent\z@ \listparindent\itemindent
+      \labelsep\z@ \rightmargin\z@ \topsep\z@ \partopsep\z@
+      \itemsep\z@ \parsep\z@ \parskip\z@}\item[]
+    \small\consolas
+    \let\do\@makeother\dospecials
+    \@makeother\( \@makeother\) \@makeother\| \@makeother\< \@makeother\>
+    \catcode`\^^M\active \catcode`\^^I=12 \catcode`\ =13~
+    \def\verbatim@processline { \exp_args:NV \__cndd_scan_toks:n \verbatim@line }
+    \__cndd_verbatim_font_hook:
+    \verbatim@start
+  }
+  {\endlist}
+
+\cs_new_protected:Npn \__cndd_link_hint:n #1
+  {
+    \leavevmode
+    {\setbox\z@\hbox{{#1}}%
+    \hb@xt@\wd\z@{\@tempdima.05em\kern\@tempdima
+      {\color{cyan!60!white}\vrule height-.25ex depth.35ex width\dimexpr\wd\z@-2\@tempdima}
+      \kern\@tempdima
+      \llap{\unhbox\z@}}}
+  }
+
+\newcounter{luadoc}
+\newcommand\indexhluadoc[2]{\hyperlink{#1}{#2}}
+\cus_doc_gset_special_index_print:nn { luatypes }
+  { { lua类型 } { \string\textcon{lua}~类型 } { } }
+\keys_define:nn { cndd/luadoc }
+  {
+    path .tl_set:N = \l__cndd_luadoc_path_tl ,
+    module .clist_set:N = \l__cndd_luadoc_module_clist ,
+    global .bool_set:N = \l__cndd_global_bool ,
+  }
+
+\cs_new_protected:Npn \__cndd_lua_define:nn #1#2
+  { \cs_new_protected:cpn { __cndd_lua_sp_ #1 : } {#2} }
+\__cndd_lua_define:nn { -> } {\mbox{~\clap{$\to$}}~}
+\__cndd_lua_define:nn { := } {\mbox{~\clap{$\coloneq$}}~}
+\__cndd_lua_define:nn { .. } {\textcolor{blue}{\bfseries ..}}
+\__cndd_lua_define:nn { | } {\textcolor{red!80!black}{|}}
+\__cndd_lua_define:nn { : } {\textcolor{green!60!black}{:}}
+\__cndd_lua_define:nn { ?: } {\textcolor{red!80!black}{?}\textcolor{green!60!black}{:}}
+\__cndd_lua_define:nn { ? } {\textcolor{red!80!black}{?}}
+\__cndd_lua_define:nn { ?? } {\textcolor{red!80!black}{??}}
+\__cndd_lua_define:nn { @ }
+  { \if_mode_vertical: \exp_after:wN \tex_indent:D \else: \exp_after:wN @ \fi: }
+\__cndd_lua_define:nn { const } {\textcolor[rgb]{0.00,0.50,0.00}{\textbf{const}}}
+\__cndd_lua_define:nn { self } {\textcolor[rgb]{0.00,0.50,0.00}{\textbf{self}}}
+\__cndd_lua_define:nn { string } {\textcolor[rgb]{0.00,0.50,0.00}{\textbf{string}}}
+\__cndd_lua_define:nn { number } {\textcolor[rgb]{0.00,0.50,0.00}{\textbf{number}}}
+\__cndd_lua_define:nn { boolean } {\textcolor[rgb]{0.00,0.50,0.00}{\textbf{boolean}}}
+\__cndd_lua_define:nn { table } {\textcolor[rgb]{0.00,0.50,0.00}{\textbf{table}}}
+\clist_map_inline:nn
+  {
+    and,   break, do,       else, elseif, end,
+    false, for,   function, goto, if,     in,
+    local, nil,   not,      or,   repeat, return,
+    then,  true,  until,    while,
+  }
+  { \__cndd_lua_define:nn {#1} { \textcolor[rgb]{0.00,0.50,0.00}{\textbf{#1}} } }
+
+\tl_map_inline:nn { _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 }
+  { \tl_const:ce { __cndd_char_id_continue_ \number`#1 _tl } { \token_to_str:N #1 } }
+\tl_map_inline:nn { _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ }
+  { \tl_const:ce { __cndd_char_id_start_ \number`#1 _tl } { \token_to_str:N #1 } }
+\tl_map_inline:nn { \!\@\#\%\^\&\*\-\+\=\"\'\/\:\|\;\\\?\<\>\.\{\}\[\]\(\) }
+  { \tl_const:ce { __cndd_char_symbol_ \number`#1 _tl } { \cs_to_str:N #1 } }
+\tl_map_inline:nn { \{\}\[\]\(\) }
+  { \tl_const:ce { __cndd_char_brace_ \number`#1 _tl } { \cs_to_str:N #1 } }
+\tl_map_inline:nn { . : } % no :
+  { \tl_const:ce { __cndd_char_sub_ \number`#1 _tl } { \token_to_str:N #1 } }
+\tl_map_inline:nn { \  }
+  { \tl_const:ce { __cndd_char_ignore_ \number`#1 _tl } { ~ } }
+
+\tl_new:N \l__cndd_ident_tl
+\tl_new:N \l__cndd_op_tl
+\int_new:N \l__cndd_cc_int
+\tl_new:N \l__cndd_label_tl
+\cs_new:Npn \__cndd_cc: { \int_use:N \l__cndd_cc_int }
+\tl_new:N \l__cndd_class_tl
+\tl_new:N \l__cndd_methods_tl
+\cs_new:Npn \__cndd_lua_split_dot:w #1 \s_stop
+  {
+    \file_parse_full_name:nNNN {#1} \l_tmpa_tl \l__cndd_class_tl \l__cndd_methods_tl
+    \tl_if_empty:NTF \l__cndd_methods_tl
+      {
+        \tl_set_eq:NN \l__cndd_methods_tl \l__cndd_class_tl
+        \tl_clear:N \l__cndd_class_tl
+      }
+      { \tl_set:Ne \l__cndd_methods_tl { \tl_head:N \l__cndd_methods_tl } }
+  }
+\use:e
+  { \cs_new:Npn \exp_not:N \__cndd_lua_split_colon:w #1 \token_to_str:N : } #2 \s_stop
+  {
+    \tl_set:Ne \l__cndd_class_tl { \tl_trim_spaces:n {#1} }
+    \tl_set:Ne \l__cndd_methods_tl { \tl_trim_spaces:n {#2} }
+  }
+\cs_new_protected:Npn \__cndd_print_ident:
+  {
+    \tl_if_empty:NF \l__cndd_ident_tl
+      {
+        \cs_if_exist_use:cF { __cndd_lua_sp_ \l__cndd_ident_tl : }
+          { \__cndd_print_ident_inner:N \l__cndd_ident_tl }
+        \tl_clear:N \l__cndd_ident_tl
+      }
+  }
+\cs_new_protected:Npn \__cndd_print_ident_inner:N #1
+  {
+    \str_set:NV \l__cndd_label_tl #1
+    \bool_if:NT \l__cus_doc_allow_indexing_bool
+      {
+        \str_if_in:NnTF \l__cndd_label_tl { : }
+          { \exp_after:wN \__cndd_lua_split_colon:w \l__cndd_label_tl \s_stop }
+          { \exp_after:wN \__cndd_lua_split_dot:w \l__cndd_label_tl \s_stop }
+        \tl_set:Nn \l__cndd_luadoc_module_tl { {luatypes} }
+        \tl_if_blank:NF \l__cndd_class_tl
+          { \tl_put_right:Nn \l__cndd_luadoc_module_tl { { \l__cndd_class_tl } } }
+        \bool_lazy_or:nnT { \tl_if_empty_p:N \l__cndd_class_tl }
+          { \cs_if_exist_p:c { r @ lua: \l__cndd_class_tl } }
+          { % 仅在标识符是一个类型，而不只是变量才写入索引
+            \__cus_doc_special_index_module:ooNnN
+              { \l__cndd_methods_tl } { \l__cndd_methods_tl }
+              \l__cndd_luadoc_module_tl { main } \c_false_tl
+          }
+      }
+    \tl_replace_all:Nee \l__cndd_label_tl { \token_to_str:N : } { . }
+    \cs_if_exist:cTF { r @ lua: \l__cndd_label_tl }
+      {
+        \cus_hyper_link:nnn {}
+          { \cus_label_info:nn { anchor } { lua: \l__cndd_label_tl } }
+          { \__cndd_link_hint:n {#1} }
+      }
+      {#1}
+  }
+\cs_new_protected:Npn \__cndd_print_op:
+  {
+    \tl_if_empty:NF \l__cndd_op_tl
+      {
+        \cs_if_exist_use:cF { __cndd_lua_sp_ \l__cndd_op_tl : } { \l__cndd_op_tl }
+        \tl_clear:N \l__cndd_op_tl
+      }
+  }
+\cs_new_protected:Npn \__cndd_scan_toks:n #1
+  {
+    \tl_clear:N \l__cndd_ident_tl
+    \tl_clear:N \l__cndd_op_tl
+    \__cndd_scan_tok:N #1 \q_recursion_tail \q_recursion_stop
+    \__cndd_print_ident: \__cndd_print_op: \@@par
+  }
+\cs_new_protected:Npn \__cndd_scan_tok_ascii:N #1
+  {
+    \int_set:Nn \l__cndd_cc_int { \int_value:w `#1 }
+    \bool_lazy_or:nnTF { \int_compare_p:nNn { \l__cndd_cc_int } > { 127 } }
+      { \tl_if_exist_p:c { __cndd_char_ignore_ \__cndd_cc: _tl } }
+      {
+        \__cndd_print_ident: \__cndd_print_op:
+        \cs_if_exist_use:cF { __cndd_char_ignore_ \__cndd_cc: _tl } { #1 }
+      }
+      {
+        \cs_if_exist:cTF { __cndd_char_symbol_ \__cndd_cc: _tl }
+          {
+            \bool_lazy_and:nnTF { ! \tl_if_empty_p:N \l__cndd_ident_tl }
+              { \cs_if_exist_p:c { __cndd_char_sub_ \__cndd_cc: _tl } }
+              {
+                \__cndd_scan_sub_check_next:nNN  { #1 }
+              }
+              {
+                \__cndd_print_ident:
+                \cs_if_exist:cT { __cndd_char_brace_ \__cndd_cc: _tl }
+                  { \__cndd_print_op: }
+                \tl_put_right:Nn \l__cndd_op_tl { #1 }
+              }
+          }
+          {
+            \cs_if_exist:cTF
+              { __cndd_char_id_ \tl_if_empty:NTF \l__cndd_ident_tl { start } { continue } _ \__cndd_cc: _tl }
+              {
+                \__cndd_print_op:
+                \tl_put_right:Nn \l__cndd_ident_tl { #1 }
+              }
+              { \__cndd_print_ident: \__cndd_print_op: #1 }
+          }
+      }
+  }
+\cs_new_protected:Npn \__cndd_scan_tok:N #1
+  {
+    \quark_if_recursion_tail_stop:N #1
+    \int_compare:nNnTF { `#1 } < { 128 }
+      {
+        \__cndd_scan_tok_ascii:N #1
+        \__cndd_scan_tok:N
+      }
+      {
+        \__cndd_print_ident: \__cndd_print_op:
+        \tl_set:Nn \l__cndd_non_ascii_tl {#1}
+        \__cndd_scan_non_ascii:N
+      }
+  }
+\tl_new:N \l__cndd_non_ascii_tl
+\cs_new_protected_nopar:Npn \__cndd_scan_non_ascii:N #1
+  {
+    \quark_if_recursion_tail_stop_do:Nn #1 { \l__cndd_non_ascii_tl }
+    \int_compare:nNnTF { `#1 } < { 128 }
+      { \l__cndd_non_ascii_tl \__cndd_scan_tok:N #1 }
+      {
+        \tl_put_right:Nn \l__cndd_non_ascii_tl {#1}
+        \__cndd_scan_non_ascii:N
+      }
+  }
+\cs_new_protected:Npn \__cndd_scan_sub_check_next:nNN #1#2#3
+  {
+    \quark_if_recursion_tail_stop_do:Nn #3
+      {
+        \__cndd_print_ident:
+        \tl_set:Nn \l__cndd_op_tl {#1}
+      }
+    \cs_if_exist:cTF { __cndd_char_id_start_ \number`#3 _tl }
+      { \tl_put_right:Nn \l__cndd_ident_tl {#1} }
+      {
+        \__cndd_print_ident:
+        \tl_set:Nn \l__cndd_op_tl {#1}
+      }
+    #2 #3
+  }
+\NewDocumentEnvironment {luasyntax} { }
+  {
+    \__cus_doc_syntax:w
+    % \hangindent2em \hangafter\@ne
+    \let\do\@makeother\dospecials
+    \@makeother\( \@makeother\) \@makeother\| \@makeother\< \@makeother\>
+    \catcode`\^^M\active \catcode`\^^I=10 \catcode`\ =13~
+    \def\verbatim@processline { \exp_args:NV \__cndd_scan_toks:n \verbatim@line }
+    \verbatim@start
+  }
+  { \__cus_doc_syntax_end: }
+\NewDocumentEnvironment {luadoc} { O{} +v }
+  { \__cndd_luadoc_start:nnw {#1} {#2} }
+  { \__cndd_luadoc_end: }
+\cs_new_protected:Npn \__cndd_luadoc_start:nnw #1#2
+  {
+    \keys_set_known:nnN { cndd/luadoc } {#1} \l__cndd_luadoc_options_clist
+    \clist_put_left:Nn \l__cndd_luadoc_options_clist { label-prefix = lua: }
+    \clist_put_left:Nn \l__cndd_luadoc_options_clist
+      { syntax-setting = {
+        \char_set_catcode_other:N (
+        \char_set_catcode_other:N \|
+        \char_set_catcode_other:N \#
+        \consolas
+      } }
+    \tl_set:Nn \l__cndd_luadoc_module_tl { { luatypes } }
+    \tl_if_empty:NF \l__cndd_luadoc_path_tl
+      {
+        \clist_put_right:Ne \l__cndd_luadoc_options_clist
+          { path = { \l__cndd_luadoc_path_tl } }
+        \clist_if_empty:NT \l__cndd_luadoc_module_clist
+          { \clist_put_right:NV \l__cndd_luadoc_module_clist \l__cndd_luadoc_path_tl }
+      }
+    \clist_map_inline:Nn \l__cndd_luadoc_module_clist
+      { \tl_put_right:Nn \l__cndd_luadoc_module_tl { {##1} } }
+    \clist_put_right:Ne \l__cndd_luadoc_options_clist
+      { module = { \l__cndd_luadoc_module_tl } }
+    \tl_set:Nn \l__cndd_luadoc_key_tl {#2}
+    \bool_if:NT \l__cndd_global_bool { \tl_gset:Nn \g__cndd_global_path_tl {#2} }
+    \exp_args:NVV \__cus_doc_fnlist:nnw
+      \l__cndd_luadoc_options_clist \l__cndd_luadoc_key_tl
+  }
+\cs_new_protected:Npn \__cndd_luadoc_end: { \__cus_doc_fnlist_end: }
+
+\tl_new:N \g__cndd_desc_tl
+\clist_new:N \g__cndd_fn_clist
+\clist_new:N \g__cndd_luadoc_options_clist
+\seq_new:N \g__cndd_syntax_seq
+\tl_new:N \g__cndd_global_path_tl
+\NewDocumentEnvironment {luadoc*} { O{} m }
+  {
+    \tl_gclear:N \g__cndd_desc_tl
+    \clist_clear:N \g__cndd_fn_clist
+    \seq_clear:N \g__cndd_syntax_seq
+    \tl_if_empty:nTF {#2}
+      { \clist_gset:Ne \g__cndd_luadoc_options_clist { path = { \g__cndd_global_path_tl } } }
+      { \clist_gset:Nn \g__cndd_luadoc_options_clist { path = {#2} } }
+    \clist_gput_right:Nn \g__cndd_luadoc_options_clist {#1}
+    \group_begin:
+    \let\do\@makeother\dospecials
+    \@makeother\( \@makeother\) \@makeother\| \@makeother\< \@makeother\>
+    \catcode`\^^M\active \catcode`\^^I=10 \catcode`\ =13 \catcode`\@=11 ~
+    \def\verbatim@processline { \exp_args:NV \__cndd_scan_dline:n \verbatim@line }
+    \verbatim@start
+  }
+  { \group_end: \__cndd_luadoc_star_end: }
+\cs_new_protected:Npn \__cndd_scan_dline:n #1
+  {
+    \tl_set:Ne \l__cndd_tmpa_tl { \tl_head:n {#1} }
+    \cs_if_exist:cTF { __cndd_scan_case_ \tl_to_str:N \l__cndd_tmpa_tl :n }
+      {
+        \tl_set:Ne \l__cndd_tmpb_tl { \tl_tail:n {#1} }
+        \use:c { __cndd_scan_case_ \tl_to_str:N \l__cndd_tmpa_tl : n \exp_after:wN }
+        \exp_after:wN { \l__cndd_tmpb_tl }
+      }
+      {
+        \tl_gput_right:Nn \g__cndd_desc_tl { #1 ^^J }
+      }
+  }
+\cs_new_protected:cpn { __cndd_scan_case_ # :n } #1
+  {
+    \tl_if_in:nnTF { \q_mark #1 } { \q_mark <@@= }
+      { \__cndd_scan_case_set:wn #1 \q_stop }
+      { \clist_gput_right:No \g__cndd_fn_clist { \tl_to_str:n {#1} } }
+  }
+\cs_new_protected:Npn \__cndd_scan_case_set:wn <@@= #1 > #2 \q_stop
+  {
+    \tl_gset:Nn \g__cndd_global_path_tl {#1}
+    \clist_gput_right:No \g__cndd_fn_clist { \tl_to_str:n {#2} }
+  }
+\cs_new_protected:cpn { __cndd_scan_case_ ! :n } #1
+  {
+    \seq_gput_right:Nn \g__cndd_syntax_seq {#1}
+  }
+\cs_new_protected:Npn \__cndd_luadoc_star_end:
+  {
+    \exp_args:Noo \__cndd_luadoc_start:nnw
+      { \g__cndd_luadoc_options_clist } { \g__cndd_fn_clist }
+    \seq_if_empty:NF \g__cndd_syntax_seq
+      {
+        \__cus_doc_syntax:w
+        \seq_map_inline:Nn \g__cndd_syntax_seq
+          { \__cndd_scan_toks:n {##1} \obeyedline }
+        \@@par \__cus_doc_syntax_end:
+      }
+    \scantokens \exp_after:wN { \g__cndd_desc_tl }
+    \__cndd_luadoc_end:
+  }
+
+\ekeysdeclarecmd\luaref{O{} m}
+  {
+    \group_begin:
+    \char_set_active_eq:NN \. \__cndd_active_dot:
+    \str_set:Nn \l__cndd_luadoc_key_tl {#2}
+    \tl_set:Nn \l__cndd_luadoc_module_tl { {luatypes} }
+    \tl_if_blank:nF {#1}
+      {
+        \tl_put_right:Nn \l__cndd_luadoc_module_tl { {#1} }
+        % \seq_set_split:Nnn \l_tmpa_seq { . } {#1}
+        % \seq_map_inline:Nn \l_tmpa_seq
+        %   { \tl_put_right:Nn \l__cndd_luadoc_module_tl { {##1} } }
+      }
+    \__cus_doc_special_index_module:ooNnN
+      { \l__cndd_luadoc_key_tl } { \l__cndd_luadoc_key_tl }
+      \l__cndd_luadoc_module_tl { main } \c_false_tl
+    \__cndd_make_print:Ne \l__cndd_tmp_tl { \tl_if_blank:nF {#1} {#1.} #2 }
+    \cs_if_exist:cT { r @ lua: \l__cndd_tmp_tl }
+      { \hyperref[lua: \l__cndd_tmp_tl ] } {\textcon{\l__cndd_tmp_tl}}
+    \group_end:
+  }
+\cs_new_protected:Npn \__cndd_active_dot:
+  { \tex_ifincsname:D . \else: . \allowbreak \fi: }
+\cs_new_protected:Npx \__cndd_make_print:Nn #1#2
+  {
+    \tl_set:Nn #1 {#2}
+    \tl_replace_all:Nnn #1 { . }
+      { \exp_args:No \exp_not:o { \char_generate:nn { `\. } { 13 } } }
+  }
+\cs_new_protected:Npn \__cndd_make_print:Ne
+  { \cus_exp_args:NNe \__cndd_make_print:Nn }
+
+\seq_new:N \g__cndd_luarun_seq
+\seq_new:N \g__cndd_luarun_result_seq
+\iow_new:N \g__cndd_luarun_iow
+\int_new:N \g__cndd_luarun_int
+\cs_new_protected:Npn \__cndd_write_luarun:nN #1 #2 % name, seq
+  {
+    \int_gincr:N \g__cndd_luarun_int
+    \iow_now:Ne \g__cndd_luarun_iow
+      {
+        \int_use:N \g__cndd_luarun_int ,
+        \seq_count:N #2 ,
+        #1
+      }
+    \seq_map_tokens:Nn #2 { \iow_now:Nn \g__cndd_luarun_iow }
+  }
+
+\NewDocumentEnvironment {luarun} { m }
+  {
+    \goodbreak
+    \seq_gclear:N \g__cndd_luarun_seq
+    \group_begin:
+    \let\do\@makeother\dospecials
+    \@makeother\( \@makeother\) \@makeother\| \@makeother\< \@makeother\>
+    \catcode`\^^M\active \catcode`\^^I=10 \catcode`\ =13~
+    \def\verbatim@processline { \seq_gput_right:NV \g__cndd_luarun_seq \verbatim@line }
+    \verbatim@start
+  }
+  {
+    \group_end:
+    \__cndd_write_luarun:nN {#1} \g__cndd_luarun_seq
+    \__cndd_luacode_get:NVF \g__cndd_luarun_result_seq \g__cndd_luarun_int
+      { \seq_gset_eq:NN \g__cndd_luarun_result_seq \c_empty_seq }
+    \__cndd_side_by_side:nn
+      {
+        \__cndd_verbatim_font_hook:
+        \seq_map_inline:Nn \g__cndd_luarun_seq
+          { \par\leavevmode \__cndd_luarun_line:n {##1} }
+      }
+      { \seq_map_inline:Nn \g__cndd_luarun_result_seq { \par\leavevmode ##1 } }
+  }
+\protected\def\luarunline{\par\noindent \kern-\dimexpr\option{/fbox/padding-left}\relax
+  \cleaders\hb@xt@.4em{\hss.\hss}\hfill 
+  \kern\dimexpr-\option{/fbox/padding-right}\relax \par}
+\cs_new_protected:Npn \__cndd_side_by_side:nn #1#2
+  {
+    \begin{longfbox}[breakable]
+      \small\consolas\parindent\z@
+      #1 \luarunline #2
+    \end{longfbox}
+  }
+\cs_new_protected:Npn \__cndd_luarun_line:n { \__cndd_scan_toks:n }
+
+\int_new:N \l__cndd_luarun_id_int
+\tl_new:N \l__cndd_luarun_name_tl
+\int_new:N \g__cndd_luarun_len_int
+\cs_new_protected:Npn \luacoderesult #1 #2 =#3. % id, name, len
+  {
+    \int_set:Nn \l__cndd_luarun_id_int {#1}
+    \tl_set:Nn \l__cndd_luarun_name_tl {#2}
+    \int_gset:Nn \g__cndd_luarun_len_int {#3}
+    \group_begin:
+      \seq_gclear:N \g__cndd_luarun_seq
+      \let\do\@makeother\dospecials
+      \@makeother\( \@makeother\) \@makeother\| \@makeother\< \@makeother\>
+      \catcode`\ =13~ \catcode`\^^I=10~ \catcode`\^^M=\active \endlinechar13~ %
+      \exp_after:wN \__cndd_luacode_grab_line:w \use_none:n
+  }
+\cs_new:Npn \__cndd_luacode_grab_line:w
+  {
+    \int_compare:nNnTF \g__cndd_luarun_len_int > { 0 }
+      {
+        \int_gdecr:N \g__cndd_luarun_len_int
+        \__cndd_luacode_grab_line_do:w
+      }
+      { \__cndd_luacode_result_finish: }
+  }
+\use:e
+  {
+    \cs_new:Npn \exp_not:N \__cndd_luacode_grab_line_do:w #1
+      \exp_args:No \exp_not:o { \char_generate:nn { `\^^M } { 13 } }
+  }
+  {
+    \seq_gput_right:Nn \g__cndd_luarun_seq {#1}
+    \__cndd_luacode_grab_line:w
+  }
+\prop_new_linked:N \g__cndd_luarun_result_prop
+\cs_new:Npn \__cndd_luacode_result_finish:
+  {
+    \group_end:
+    \prop_gput:NVV \g__cndd_luarun_result_prop
+      \l__cndd_luarun_id_int
+      \g__cndd_luarun_seq
+    \prop_gput:NVV \g__cndd_luarun_result_prop
+      \l__cndd_luarun_name_tl
+      \g__cndd_luarun_seq
+  }
+\cs_new:Npn \__cndd_luacode_get:NnF #1 #2
+  { \prop_get:NnNF \g__cndd_luarun_result_prop {#2} #1 }
+\cs_new:Npn \__cndd_luacode_get:NVF #1 #2
+  { \exp_args:NNV \prop_get:NnNF \g__cndd_luarun_result_prop #2 #1 }
+
+\bool_if:NT \l__cndd_luarun_bool
+  {
+    \iow_open:Nn \g__cndd_luarun_iow { \l__cndd_luarun_tl }
+    \cus_hook_gput_ae:n { \file_if_exist_input:n { \l__cndd_luarun_out_tl } }
+    \cus_hook_gput_lp:n
+      {
+        \iow_close:N \g__cndd_luarun_iow
+        \sys_shell_now:e { cindex ~ -s ~ cindexdoc.eval.cilua ~ -o ~ \l__cndd_luarun_out_tl \c_space_tl \l__cndd_luarun_tl }
+        % \tl_set:Nn \l_tmpa_tl { \file_mdfive_hash:V \l__cndd_luarun_tl }
+        % \iow_now:Ne \@auxout { \string\gdef \string\@cindexdoc@mdv { \l_tmpa_tl } }
+        % \bool_lazy_and:nnF
+        %   {
+        %     \cs_if_exist_p:N \@cindexdoc@mdv &&
+        %     \file_if_exist_p:n \l__cndd_luarun_out_tl
+        %   }
+        %   { \str_if_eq_p:ee { \@cindexdoc@mdv } { \l_tmpa_tl } }
+        %   {
+        %     \sys_shell_now:e { cindex ~ -s ~ cindexdoc.eval.cilua ~ -o ~ \l__cndd_luarun_out_tl \c_space_tl \l__cndd_luarun_tl }
+        %   }
+      }
+  }
+
+\group_begin:
+\char_set_catcode_space:n { 32 }
+\char_set_catcode_other:N \#
+\tl_const:Nn \c__cndd_lua_pinyin_tl
+  {
+local function print_tone(pre, t, n)
+    local normal_funcs = function (t_, n_)
+        local tab = { [1] = "\\\\=", [2] = "\\\\'", [3] = "\\\\v", [4] = "\\\\`"};
+        return (tab[n_] or "") .. "{" .. t_ .. "}";
+    end;
+    local funcs = {
+        ['i'] = function (t_, n_)
+            local tab = { [1] = 'ī', [2] = 'í', [3] = 'ǐ', [4] = 'ì' };
+            return tab[n_] or 'i';
+        end,
+        ['v'] = function (t_, n_)
+            local rep = { ['l'] = true, ['n'] = true, ['L'] = true, ['N'] = true };
+            local tab = { [1] = 'ǖ', [2] = 'ǘ', [3] = 'ǚ', [4] = 'ǜ' };
+            if rep[pre] then
+                return tab[n_] or 'ü';
+            else
+                return normal_funcs('u', n_);
+            end
+        end,
+        ['ü'] = function (t_, n_)
+            local rep = { ['l'] = true, ['n'] = true, ['L'] = true, ['N'] = true };
+            local tab = { [1] = 'ǖ', [2] = 'ǘ', [3] = 'ǚ', [4] = 'ǜ' };
+            if rep[pre] then
+                return tab[n_] or 'ü';
+            else
+                return normal_funcs('u', n_);
+            end
+        end,
+    };
+    return (funcs[t] or normal_funcs)(t, tonumber(n));
+end
+local function replace_v(c)
+    local rep = { ['l'] = true, ['n'] = true, ['L'] = true, ['N'] = true };
+    if c == 'v' or c == 'ü' then
+        if rep[c] then return 'ü' else return 'u' end
+    else
+        return c;
+    end
+end
+local function pinyin(s)
+    local tone_table = { ['a'] = 3, ['e'] = 2, ['i'] = 2, ['o'] = 1, ['u'] = 1, ['v'] = 1, ['ü'] = 1 };
+    local first = true;
+    local item = "";
+    local pre = "";
+    local tone = "";
+    local post = "";
+    for i = 1, #s do
+        local curr = s:sub(i, i);
+        local n = tonumber(curr);
+        if n then
+            if first then first = false end
+            return tostring(pre) .. print_tone(pre, tone, n) .. tostring(post);
+        else
+            if (tone_table[tone] or 0) > (tone_table[curr] or 0) then
+                post = post .. curr;
+            else
+                tone = curr;
+                pre = tostring(item);
+                post = "";
+            end
+            item = item .. replace_v(curr);
+        end
+    end
+    if first then
+        return tostring(s);
+    else
+        return tostring(item);
+    end
+end
+cindex = cindex or {};
+cindex.pinyin = pinyin;
+  }
+\group_end:
+\sys_if_engine_luatex:TF
+  {
+    \lua_now:e { \tl_to_str:N \c__cndd_lua_pinyin_tl }
+    \NewDocumentCommand \pinyin { O{} m }
+      { \lua_now:e { tex.print(cindex.pinyin([==[#2]==])) } }
+  }
+  { \RequirePackage{xpinyin} }

@@ -13,9 +13,10 @@ pub fn make_lua<S: AsRef<str>>(
     f: impl Fn(&Lua) -> Result<()>,
 ) -> Result<Lua> {
     let lua = unsafe { Lua::unsafe_new() };
-    LuaModule::Lpeg.preload(&lua)?;
+    LuaModule::Digest.preload(&lua)?;
     LuaModule::IcuTable.preload(&lua)?;
     LuaModule::Jits.preload(&lua)?;
+    LuaModule::Lpeg.preload(&lua)?;
     f(&lua)?;
     let func = lua.load(include_str!("cindex.lua")).into_function()?;
     match user_script {
@@ -28,21 +29,19 @@ pub fn make_lua<S: AsRef<str>>(
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LuaModule {
-    Lpeg,
+    Digest,
     IcuTable,
     Jits,
+    Lpeg,
 }
 
 impl LuaModule {
     pub fn preload(&self, lua: &Lua) -> Result<()> {
         unsafe {
             match self {
-                LuaModule::Lpeg => lua.preload_module(
-                    "lpeg",
-                    lua.create_c_function(std::mem::transmute(
-                        luajit_modules::luaopen_lpeg as *const (),
-                    ))?,
-                )?,
+                LuaModule::Digest => {
+                    lua.preload_module("digest", lua.create_function(luaopen_digest)?)?
+                }
                 LuaModule::IcuTable => {
                     lua.preload_module("icu.table", lua.create_function(luaopen_icu_table)?)?
                 }
@@ -54,6 +53,12 @@ impl LuaModule {
                         )?;
                     }
                 }
+                LuaModule::Lpeg => lua.preload_module(
+                    "lpeg",
+                    lua.create_c_function(std::mem::transmute(
+                        luajit_modules::luaopen_lpeg as *const (),
+                    ))?,
+                )?,
             }
         }
         Ok(())
@@ -148,4 +153,29 @@ fn luaopen_icu_table(lua: &Lua, _: ()) -> LuaResult<LuaTable> {
 
     icu.raw_set("PropertyShortNames", name_table)?;
     Ok(icu)
+}
+
+fn luaopen_digest(lua: &Lua, _: ()) -> LuaResult<LuaTable> {
+    use digest::Digest;
+    let digest = lua.create_table_with_capacity(3, 0)?;
+
+    macro_rules! gene {
+        ($name:literal, $algo:path) => {
+            digest.raw_set(
+                $name,
+                lua.create_function::<_, LuaString, LuaValue>(|lua, arg| {
+                    let hash = <$algo>::digest(arg.as_bytes());
+                    let s = hex::encode(hash);
+                    Ok(LuaValue::String(lua.create_string(s.as_bytes())?))
+                })?,
+            )?;
+        };
+    }
+
+    gene!("md5", md5::Md5);
+    gene!("sha256", sha2::Sha256);
+    gene!("sha512", sha2::Sha512);
+    gene!("blake2b128", blake2::Blake2b128);
+    gene!("blake2b256", blake2::Blake2b256);
+    Ok(digest)
 }

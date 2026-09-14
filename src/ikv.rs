@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow, bail};
-use compact_str::CompactString;
 use smallvec::SmallVec;
 
 use crate::{IndexPage, style::*};
@@ -15,6 +14,10 @@ pub fn from_ikv<T: AsRef<str>>(
     };
 
     let line = line.as_ref().trim_ascii_start();
+    if line.is_empty() {
+        return Ok(None);
+    }
+
     // 我们允许原始的 \indexentry .. 这种形式存在，并且优先使用它。
     if line.starts_with(&style.keyword) {
         return IndexEntry::parse_index_line(style, line);
@@ -26,38 +29,26 @@ pub fn from_ikv<T: AsRef<str>>(
         .next()
         .with_context(|| anyhow!("missing page in {line}"))?;
     let mut pages = SmallVec::<[IndexPage; 1]>::new();
-    for p in page_raw.split(&style.page_compositor) {
-        pages.push(IndexPage::from_str(p)?);
+    if !page_raw.is_empty() {
+        for p in page_raw.split(&style.page_compositor) {
+            pages.push(IndexPage::from_str(p)?);
+        }
     }
+
+    let range = line_part
+        .next()
+        .with_context(|| anyhow!("missing range in {line}"))?;
+    let range = match range {
+        "" | "None" | "none" => RangeKind::None,
+        "Open" | "open" => RangeKind::Open,
+        "Close" | "close" => RangeKind::Close,
+        _ => bail!("invalid range kind: {range}, available values: [None, Open, Close]"),
+    };
 
     let commands = line_part
         .next()
-        .with_context(|| anyhow!("missing range and commands in {line}"))?;
-    let (range, page_commands) = if commands.starts_with(style.range_open) {
-        (
-            RangeKind::Open,
-            commands
-                .len()
-                .gt(&1)
-                .then_some(CompactString::new(&commands[1..])),
-        )
-    } else if commands.starts_with(style.range_close) {
-        (
-            RangeKind::Close,
-            commands
-                .len()
-                .gt(&1)
-                .then_some(CompactString::new(&commands[1..])),
-        )
-    } else {
-        (
-            RangeKind::None,
-            commands
-                .len()
-                .gt(&0)
-                .then_some(CompactString::new(commands)),
-        )
-    };
+        .with_context(|| anyhow!("missing commands in {line}"))?;
+    let page_commands = commands.len().gt(&0).then_some(commands.into());
 
     let length = line_part
         .next()

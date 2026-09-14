@@ -40,7 +40,6 @@ typedef struct {
 typedef struct {
     bool (*idx_input_read_all)(const void*, void*, const StrRef*);
     bool (*ikv_input_read_all)(const void*, void*, const StrRef*);
-    int (*compare)(const void*, const void*);
     bool (*write_to_output)(void*, const uint8_t*, size_t);
     bool (*log)(uint8_t, const uint8_t*, size_t);
     void* ist_input;
@@ -213,31 +212,31 @@ local byte = string.byte;
 
 Logger = {
     error = function (s)
-        if type(s) then return __api.log(1, s, #s);
+        if type(s) == "string" then return __api.log(1, s, #s);
         elseif ffi.istype(StrRef, s) then return __api.log(1, s.ptr, s.len);
         else error("invalid argument type for Logger.error, except StrRef|string, got " .. type(s));
         end
     end,
     warn = function (s)
-        if type(s) then return __api.log(2, s, #s);
+        if type(s) == "string" then return __api.log(2, s, #s);
         elseif ffi.istype(StrRef, s) then return __api.log(2, s.ptr, s.len);
         else error("invalid argument type for Logger.warn, except StrRef|string, got " .. type(s));
         end
     end,
     info = function (s)
-        if type(s) then return __api.log(3, s, #s);
+        if type(s) == "string" then return __api.log(3, s, #s);
         elseif ffi.istype(StrRef, s) then return __api.log(3, s.ptr, s.len);
         else error("invalid argument type for Logger.info, except StrRef|string, got " .. type(s));
         end
     end,
     debug = function (s)
-        if type(s) then return __api.log(4, s, #s);
+        if type(s) == "string" then return __api.log(4, s, #s);
         elseif ffi.istype(StrRef, s) then return __api.log(4, s.ptr, s.len);
         else error("invalid argument type for Logger.debug, except StrRef|string, got " .. type(s));
         end
     end,
     trace = function (s)
-        if type(s) then return __api.log(5, s, #s);
+        if type(s) == "string" then return __api.log(5, s, #s);
         elseif ffi.istype(StrRef, s) then return __api.log(5, s.ptr, s.len);
         else error("invalid argument type for Logger.trace, except StrRef|string, got " .. type(s));
         end
@@ -499,9 +498,10 @@ Char = ffi.metatype("Char", {
                 else
                     return 1;
                 end
-            elseif (ffi.istype(Char, lhs) and type(rhs) == "nil")
-                or(type(lhs) == "nil" and ffi.istype(Char, rhs)) then
-                return nil;
+            elseif (ffi.istype(Char, lhs) and type(rhs) == "nil") then
+                return __api.utf8char.is_valid(lhs.inner) == false and 0 or nil;
+            elseif type(lhs) == "nil" and ffi.istype(Char, rhs) then
+                return not __api.utf8char.is_valid(rhs.inner) == false and 0 or nil;
             else
                 error("incompatible type to compare");
             end
@@ -700,7 +700,7 @@ StrRef = ffi.metatype("StrRef", {
                 error("invalid StrRef");
             end
         end,
-        eq_ignore_case = function (lhs, rhs) return lhs:cmp_ignore_case(rhs) == 0 end;
+        eq_ignore_case = function (lhs, rhs) return StrRef.cmp_ignore_case(lhs, rhs) == 0 end;
         cmp_ignore_case = function (lhs, rhs)
             local res = nil;
             if ffi.istype(StrRef, lhs) and ffi.istype(StrRef, rhs) then
@@ -826,7 +826,7 @@ StrRef = ffi.metatype("StrRef", {
             end;
         end,
         trim_ascii_spaces = function (self, start, end_)
-            local out = StrRef(self);
+            local out = ffi.new(StrRef, self);
             if start ~= false then start = true end
             if end_ ~= false then end_ = true end
             if __api.strref.trim_ascii_spaces(self, start, end_, out) then
@@ -846,8 +846,20 @@ local index_entry_array_mt = {
     is_nil = function (arr)
         return arr.inner == ffi.cast(voidptr_t, 0);
     end,
+    is_empty = function (self)
+        return self.inner == ffi.cast(voidptr_t, 0) or __api.index.indices_len(self.inner) == 0;
+    end,
     get = function (arr, n)
         return ffi.new(IndexEntryRef, __api.index.indices_at(arr, n));
+    end,
+    push = function (self, entry)
+        if ffi.istype(IndexEntryRefMut, entry) then
+            __api.index._indices_push_boxed_entry(self.inner, entry.inner);
+        elseif type(entry) == "table" then
+            __api.index._indices_push_boxed_entry(self.inner, IndexEntryRefMut(entry).inner);
+        else
+            error("invalid argument type for IndexEntryArray.push, expect IndexEntryRefMut|table");
+        end
     end,
     extend_from_iterator = function (self, f)
         if not ffi.istype(IndexEntryArray, self) then
@@ -860,6 +872,8 @@ local index_entry_array_mt = {
                 __api.index._indices_push_boxed_entry(arr_ptr, entry.inner);
             elseif type(entry) == "table" then
                 __api.index._indices_push_boxed_entry(arr_ptr, IndexEntryRefMut(entry).inner);
+            elseif entry == false then
+                -- pass
             else
                 error("invalid return value of parse_index_line, except IndexEntryRefMut|table, got " .. type(entry));
             end
@@ -893,6 +907,17 @@ IndexEntryArray = ffi.metatype("IndexEntryArray", {
 
 local indexentry_to_table = __c_function_api.indexentry_to_table;
 IndexEntryRef = ffi.metatype("IndexEntryRef", {
+    __eq = function (lhs, rhs)
+        if type(lhs) == "nil" and ffi.istype(IndexEntryRef, rhs) then
+            return nil;
+        elseif ffi.istype(IndexEntryRef, lhs) and type(rhs) == "nil" then
+            return nil;
+        elseif ffi.istype(IndexEntryRef, lhs) and ffi.istype(IndexEntryRef, rhs) then
+            return lhs.inner == rhs.inner;
+        else
+            error("incompatible type for IndexEntryRef.__eq");
+        end
+    end,
     __index = {
         is_nil = function (e)
             return e.inner == ffi.cast(voidptr_t, 0);
@@ -912,8 +937,8 @@ IndexEntryRef = ffi.metatype("IndexEntryRef", {
         end,
         keys = function (self)
             local i = 0;
-            local call_fn = function (e)
-                local res = e:key_n(i);
+            local call_fn = function ()
+                local res = self:key_n(i);
                 if res == nil then
                     return nil;
                 else
@@ -921,7 +946,7 @@ IndexEntryRef = ffi.metatype("IndexEntryRef", {
                     return res;
                 end
             end;
-            return call_fn, self;
+            return call_fn;
         end,
         as_table = function (self)
             local ptr = ffi.cast(size_t, self.inner);
@@ -1041,6 +1066,17 @@ IndexEntryRefMut = ffi.metatype("IndexEntryRefMut", {
 });
 local mergedentry_to_table = __c_function_api.mergedentry_to_table;
 MergedEntryRef = ffi.metatype("MergedEntryRef", {
+    __eq = function (lhs, rhs)
+        if type(lhs) == "nil" and ffi.istype(IndexEntryRef, rhs) then
+            return nil;
+        elseif ffi.istype(IndexEntryRef, lhs) and type(rhs) == "nil" then
+            return nil;
+        elseif ffi.istype(IndexEntryRef, lhs) and ffi.istype(IndexEntryRef, rhs) then
+            return lhs.inner == rhs.inner;
+        else
+            error("incompatible type for MergedEntryRef.__eq");
+        end
+    end,
     __index = {
         is_nil = function (e)
             return e.inner == ffi.cast(voidptr_t, 0);
@@ -1060,8 +1096,8 @@ MergedEntryRef = ffi.metatype("MergedEntryRef", {
         end,
         levels = function (self)
             local i = 0;
-            local call_fn = function (e)
-                local res = e:level_n(i);
+            local call_fn = function ()
+                local res = self:level_n(i);
                 if res == nil then
                     return nil;
                 else
@@ -1069,15 +1105,15 @@ MergedEntryRef = ffi.metatype("MergedEntryRef", {
                     return res;
                 end
             end;
-            return call_fn, self;
+            return call_fn;
         end,
         key_n = function (self, n) local res = ffi.new(StrRef);
             if __api.index.merged_key_n(self.inner, n, res) then return res else return nil end
         end,
         keys = function (self)
             local i = 0;
-            local call_fn = function (e)
-                local res = e:key_n(i);
+            local call_fn = function ()
+                local res = self:key_n(i);
                 if res == nil then
                     return nil;
                 else
@@ -1085,7 +1121,7 @@ MergedEntryRef = ffi.metatype("MergedEntryRef", {
                     return res;
                 end
             end;
-            return call_fn, self;
+            return call_fn;
         end,
         pages_count = function (self)
             return tonumber(__api.index.merged_pages_count(self.inner));
@@ -1103,8 +1139,8 @@ MergedEntryRef = ffi.metatype("MergedEntryRef", {
         end,
         page_commands = function (self)
             local i = 0;
-            local call_fn = function (e)
-                local res = e:page_command_n(i);
+            local call_fn = function ()
+                local res = self:page_command_n(i);
                 if res == nil then
                     return nil;
                 else
@@ -1112,7 +1148,7 @@ MergedEntryRef = ffi.metatype("MergedEntryRef", {
                     return res;
                 end
             end;
-            return call_fn, self;
+            return call_fn;
         end,
         pages_raw_n = function (self, n)
             local o1, o2 = ffi.new(StrRef), ffi.new(StrRef);
@@ -1128,8 +1164,8 @@ MergedEntryRef = ffi.metatype("MergedEntryRef", {
         end,
         pages_raws = function (self)
             local i = 0;
-            local call_fn = function (e)
-                local o1, o2 = e:pages_raw_n(i);
+            local call_fn = function ()
+                local o1, o2 = self:pages_raw_n(i);
                 if o1 == nil then
                     return nil, nil;
                 else
@@ -1137,7 +1173,7 @@ MergedEntryRef = ffi.metatype("MergedEntryRef", {
                     return o1, o2;
                 end
             end;
-            return call_fn, self;
+            return call_fn;
         end,
         page_span_n = function (self, n)
             return tonumber(__api.index.merged_page_span_n(self.inner, n));
@@ -1145,12 +1181,12 @@ MergedEntryRef = ffi.metatype("MergedEntryRef", {
         page_spans = function (self)
             local i = 0;
             local len = self:pages_count();
-            local call_fn = function (e)
-                local res = e:page_span_n(i);
+            local call_fn = function ()
+                local res = self:page_span_n(i);
                 i = i + 1;
                 if i >= len then return nil else return res end
             end;
-            return call_fn, self;
+            return call_fn;
         end,
         max_same_key = function (entry1, entry2)
             return tonumber(__api.index.merged_max_same_key(entry1.inner, entry2.inner));
@@ -1265,7 +1301,7 @@ Emoji = ffi.metatype("Emoji", {
     __index = {
         name = function (self) local res = ffi.new(StrRef);
             if __api.data.emoji_name(self.inner, res) then return res else return nil end end,
-        group = function (self) return __api.data.emoji_group(self.inner) end,
+        group = function (self) return tonumber(__api.data.emoji_group(self.inner)) end,
     },
     __new = function (_ct, s)
         local ptr = nil;
@@ -1807,9 +1843,15 @@ setmetatable(special_char, {
 local bihua_to_group = cindex_table.BiHuaToGroup;
 local bushou_to_group = cindex_table.BuShouToGroup;
 CIndex = {
+    Util = {},
     Ideographic = {},
     Entry = {},
 }
+CIndex.Util.is_ctype = ffi.istype;
+local table_to_json = __c_function_api.table_to_json;
+CIndex.Util.table_to_json_string = table_to_json;
+local value_from_json = __c_function_api.value_from_json;
+CIndex.Util.value_from_json_string = value_from_json;
 CIndex.Ideographic.group_by_pinyin = function (chr)
     local sp = special_char[tonumber(chr.inner)];
     if sp then
@@ -1896,14 +1938,7 @@ CIndex.Entry.compare_by_default = function (lhs, rhs)
     return len_lhs <= len_rhs;
 end;
 local char_cmp_case_fold = function (l, r)
-    local caseless_cmp = Char(l):simple_fold():cmp(Char(r):simple_fold());
-    if caseless_cmp < 0 then
-        return true;
-    elseif caseless_cmp > 0 then
-        return false;
-    else
-        return l < r;
-    end
+    return Char(l):simple_fold():cmp(Char(r):simple_fold());
 end;
 -- 使用读音排序时，没有读音数据的字符（包括生僻字）一律排在有读音的字符之前，
 -- 汉字按其最常用读音比较，读音相同汉字的按 Unicode 编码排序。
@@ -1962,7 +1997,10 @@ CIndex.Entry.compare_by_pinyin = function (lhs, rhs)
                     return true;
                 elseif not l_man and not r_man then
                     -- 两个都没有读音，按 Unicode 排序
-                    return char_cmp_case_fold(l_char, r_char);
+                    local r_caseless = char_cmp_case_fold(l_char, r_char);
+                    if r_caseless ~= 0 then
+                        return r_caseless < 0;
+                    end
                 elseif l_man == r_man then
                     if l_tone ~= r_tone then
                         return l_tone < r_tone;
@@ -1974,8 +2012,10 @@ CIndex.Entry.compare_by_pinyin = function (lhs, rhs)
 
             elseif not l_is_cjk and not r_is_cjk then
                 -- 两个都不是汉字：直接按 Unicode 码点
-                return char_cmp_case_fold(l_char, r_char);
-
+                local r_caseless = char_cmp_case_fold(l_char, r_char);
+                if r_caseless ~= 0 then
+                    return r_caseless < 0;
+                end
             else
                 -- 混合：非汉字排在前面
                 if not l_is_cjk then  -- l 非汉字，r 汉字
@@ -2059,7 +2099,10 @@ CIndex.Entry.compare_by_bihua = function (lhs, rhs)
                             end
                             if cmp_res == 0 then
                                 -- 笔顺仍然相同的，按 Unicode 比较
-                                return char_cmp_case_fold(l_char, r_char);
+                                cmp_res = char_cmp_case_fold(l_char, r_char);
+                                if cmp_res ~= 0 then
+                                    return cmp_res < 0;
+                                end
                             else
                                 return cmp_res < 0;
                             end
@@ -2070,7 +2113,10 @@ CIndex.Entry.compare_by_bihua = function (lhs, rhs)
                             return false;
                         else
                             -- 两个都没有，按 Unicode 排序，此处 l 与 r 不可能相等
-                            return char_cmp_case_fold(l_char, r_char);
+                            local cmp_res = char_cmp_case_fold(l_char, r_char);
+                            if cmp_res ~= 0 then
+                                return cmp_res < 0;
+                            end
                         end
                     else
                         return l_total_strokes < r_total_strokes;
@@ -2088,7 +2134,10 @@ CIndex.Entry.compare_by_bihua = function (lhs, rhs)
 
             elseif not l_is_cjk and not r_is_cjk then
                 -- 两个都不是汉字：直接按 Unicode 码点
-                return char_cmp_case_fold(l_char, r_char);
+                local cmp_res = char_cmp_case_fold(l_char, r_char);
+                if cmp_res ~= 0 then
+                    return cmp_res < 0;
+                end
             else
                 -- 混合：非汉字排在前面
                 if not l_is_cjk then  -- l 非汉字，r 汉字
@@ -2158,7 +2207,10 @@ CIndex.Entry.compare_by_bushou = function (lhs, rhs)
                         if l_addi and r_addi then
                             if l_addi == r_addi then
                                 -- 仍然相同的，按 Unicode 比较
-                                return char_cmp_case_fold(l_char, r_char);
+                                local cmp_res = char_cmp_case_fold(l_char, r_char);
+                                if cmp_res ~= 0 then
+                                    return cmp_res < 0;
+                                end
                             else
                                 return l_addi < r_addi;
                             end
@@ -2189,7 +2241,10 @@ CIndex.Entry.compare_by_bushou = function (lhs, rhs)
 
             elseif not l_is_cjk and not r_is_cjk then
                 -- 两个都不是汉字：直接按 Unicode 码点
-                return char_cmp_case_fold(l_char, r_char);
+                local cmp_res = char_cmp_case_fold(l_char, r_char);
+                if cmp_res ~= 0 then
+                    return cmp_res < 0;
+                end
             else
                 -- 混合：非汉字排在前面
                 if not l_is_cjk then  -- l 非汉字，r 汉字
@@ -2229,7 +2284,7 @@ local function deep_copy(o, lookup_table)
     return new_table;
 end
 
-local safe_env = deep_copy(_G);
+local safe_env = setmetatable({}, { __index = _G });
 local preload = {};
 for k, v in pairs(package.preload) do
     if string.sub(k, 1, 3) ~= "jit" then
@@ -2249,7 +2304,7 @@ safe_env.os.rename = nil;
 safe_env.io = nil;
 safe_env.debug = nil;
 local loaded = { bit = bit, cindex = safe_env.CIndex };
-safe_env.package = { preload = preload, loaded = loaded };
+safe_env.package = { preload = preload, loaded = loaded, cpath = nil, path = nil };
 safe_env.require = function (name)
     local t = loaded[name];
     if t then
@@ -2303,7 +2358,7 @@ local detect_groups_with = function (group_func, start_ptr, size_of, len, result
     local entry = ffi.new(MergedEntryRef);
     for i = 0, len-1 do
         entry.inner = ffi.cast(voidptr_t, start_ptr + i * size_of);
-        local key = tostring(group_func(entry:key_n(0)));
+        local key = tostring(group_func(entry));
         if result[key] then
             -- 如果已经存在，则返回整数索引
             result_ptr[i] = result[key];
@@ -2324,11 +2379,34 @@ if has_custom and type(user_script) == "table" then
         if type(user_script[raw]) == "function" then
             -- _G[raw] = user_script[raw];
             error("The function '" .. raw .. "' must not be provided!");
+        elseif type(_G[raw]) == "function" then
+            -- already defined _G[raw], by pass
         elseif type(user_script[key]) == "function" then
             _G[raw] = func;
         end
     end;
+    local get_value = function (key, default_value, value_type)
+        if value_type ~= nil then
+            if type(user_script[key]) == value_type then
+                _G[key] = user_script[key];
+            elseif type(user_script[key]) == "nil" then
+                _G[key] = default_value;
+            else
+                error("expect " .. value_type .. " for \'" .. key .. "\'");
+            end
+        elseif type(user_script[key]) == "nil" then
+            _G[key] = default_value;
+        else
+            _G[key] = user_script[key];
+        end
+    end;
 
+    gen_func("__cindex_read_indices", "parse_indices_string", function (file_path, s, is_ikv, vec)
+        local parse_indices_string = user_script.parse_indices_string;
+        local lines = StrRef.from_ptr(ffi.cast(voidptr_t, s));
+        local arr = ffi.new(IndexEntryArray, ffi.cast(voidptr_t, vec));
+        arr:extend_from_iterator(function() return parse_indices_string(file_path, lines, is_ikv) end);
+    end);
     gen_func("__cindex_read_indices", "parse_index_line", function (file_path, s, is_ikv, vec)
         local parse_index_line = user_script.parse_index_line;
         local line_func = StrRef.from_ptr(ffi.cast(voidptr_t, s)):lines();
@@ -2351,7 +2429,7 @@ if has_custom and type(user_script) == "table" then
             return prec;
         end
     end);
-    gen_func("__cindex_read_indices", "group_detect", function (start_ptr, size_of, len, result_ptr)
+    gen_func("__cindex_detect_groups", "group_detect", function (start_ptr, size_of, len, result_ptr)
         local group_func = user_script.group_detect;
         return detect_groups_with(group_func, start_ptr, size_of, len, result_ptr);
     end);
@@ -2389,6 +2467,7 @@ if has_custom and type(user_script) == "table" then
             end);
         end
     end);
+    get_value("output_style", {}, "table");
 elseif has_custom and type(user_script) ~= "nil" then
     error("invalid user script: " .. tostring(script));
 end
@@ -2407,7 +2486,8 @@ _G.__cindex_page_precedence = _G.__cindex_page_precedence or function()
 end;
 
 local detect_key_func = function(ideo_group_func)
-    return function (key_0)
+    return function (entry)
+        local key_0 = entry:key_n(0);
         if key_0 and not key_0:is_empty() then
             local first_char = Char(key_0:head());
             if first_char:is_ideographic() then
@@ -2506,19 +2586,6 @@ _G.__cindex_sort_entries = _G.__cindex_sort_entries or function (target_table)
         end
     end
 
-    local _stable_sort = function(t, comp)
-        -- 插入排序
-        for i = 2, #t do
-            local key = t[i];
-            local j = i - 1;
-            while j > 0 and comp(key, t[j]) do
-                t[j + 1] = t[j];
-                j = j - 1;
-            end
-            t[j + 1] = key;
-        end
-    end
-
     for g, v in pairs(target_table) do
         if g == "Numbers" then
             local number_cache = {};
@@ -2578,6 +2645,18 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
         error("missing output style");
     end
 
+    local output_style = _G["output_style"] or {};
+    for k, v in pairs(IstOutputStyle) do
+        local o_v = output_style[k];
+        if not o_v then
+            output_style[k] = v;
+        elseif type(o_v) == type(v) then
+            -- pass
+        else
+            output_style[k] = function() return o_v end;
+        end
+    end
+
     buf = ffi.cast(voidptr_t, buf);
     local write_to_output = function (s)
         if ffi.istype(StrRef, s) then
@@ -2608,55 +2687,55 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
         end
     end
 
-    local preamble = IstOutputStyle:preamble();
-    local postamble = IstOutputStyle:postamble();
-    local group_skip = IstOutputStyle:group_skip();
-    local heading_prefix = IstOutputStyle:heading_prefix();
-    local heading_suffix = IstOutputStyle:heading_suffix();
-    local headings_flag = IstOutputStyle:headings_flag();
-    local numhead_positive = IstOutputStyle:numhead_positive();
-    local numhead_negative = IstOutputStyle:numhead_negative();
-    local symhead_positive = IstOutputStyle:symhead_positive();
-    local symhead_negative = IstOutputStyle:symhead_negative();
-    local item_0 = IstOutputStyle:item_0();
-    local item_1 = IstOutputStyle:item_1();
-    local item_2 = IstOutputStyle:item_2();
-    local item_01 = IstOutputStyle:item_01();
-    local item_x1 = IstOutputStyle:item_x1();
-    local item_12 = IstOutputStyle:item_12();
-    local item_x2 = IstOutputStyle:item_x2();
-    local delim_0 = IstOutputStyle:delim_0();
-    local delim_1 = IstOutputStyle:delim_1();
-    local delim_2 = IstOutputStyle:delim_2();
-    local delim_n = IstOutputStyle:delim_n();
-    local delim_r = IstOutputStyle:delim_r();
-    local delim_t = IstOutputStyle:delim_t();
-    local encap_prefix = IstOutputStyle:encap_prefix();
-    local encap_infix = IstOutputStyle:encap_infix();
-    local encap_suffix = IstOutputStyle:encap_suffix();
-    local _page_precedence = IstOutputStyle:page_precedence();
-    local suffix_2p = IstOutputStyle:suffix_2p();
-    local suffix_3p = IstOutputStyle:suffix_3p();
-    local suffix_mp = IstOutputStyle:suffix_mp();
-    local stroke_prefix = IstOutputStyle:stroke_prefix();
-    local stroke_suffix = IstOutputStyle:stroke_suffix();
-    local radical_prefix = IstOutputStyle:radical_prefix();
-    local radical_suffix = IstOutputStyle:radical_suffix();
-    local radical_simplified_flag = IstOutputStyle:radical_simplified_flag();
-    local radical_simplified_prefix = IstOutputStyle:radical_simplified_prefix();
-    local radical_simplified_delimiter = IstOutputStyle:radical_simplified_delimiter();
-    local radical_simplified_suffix = IstOutputStyle:radical_simplified_suffix();
+    local preamble = output_style:preamble();
+    local postamble = output_style:postamble();
+    local group_skip = output_style:group_skip();
+    local heading_prefix = output_style:heading_prefix();
+    local heading_suffix = output_style:heading_suffix();
+    local headings_flag = output_style:headings_flag();
+    local numhead_positive = output_style:numhead_positive();
+    local numhead_negative = output_style:numhead_negative();
+    local symhead_positive = output_style:symhead_positive();
+    local symhead_negative = output_style:symhead_negative();
+    local item_0 = output_style:item_0();
+    local item_1 = output_style:item_1();
+    local item_2 = output_style:item_2();
+    local item_01 = output_style:item_01();
+    local item_x1 = output_style:item_x1();
+    local item_12 = output_style:item_12();
+    local item_x2 = output_style:item_x2();
+    local delim_0 = output_style:delim_0();
+    local delim_1 = output_style:delim_1();
+    local delim_2 = output_style:delim_2();
+    local delim_n = output_style:delim_n();
+    local delim_r = output_style:delim_r();
+    local delim_t = output_style:delim_t();
+    local encap_prefix = output_style:encap_prefix();
+    local encap_infix = output_style:encap_infix();
+    local encap_suffix = output_style:encap_suffix();
+    local _page_precedence = output_style:page_precedence();
+    local suffix_2p = output_style:suffix_2p();
+    local suffix_3p = output_style:suffix_3p();
+    local suffix_mp = output_style:suffix_mp();
+    local stroke_prefix = output_style:stroke_prefix();
+    local stroke_suffix = output_style:stroke_suffix();
+    local radical_prefix = output_style:radical_prefix();
+    local radical_suffix = output_style:radical_suffix();
+    local radical_simplified_flag = tonumber(output_style:radical_simplified_flag());
+    local radical_simplified_prefix = output_style:radical_simplified_prefix();
+    local radical_simplified_delimiter = output_style:radical_simplified_delimiter();
+    local radical_simplified_suffix = output_style:radical_simplified_suffix();
 
     local write_a_page_range = function (span, commands, l, r)
         if not l then return end
         local replace_r = nil;
         if span == 1 then
         elseif span == 2 then
-            replace_r = (suffix_2p and not suffix_2p:is_empty()) and suffix_2p;
+            replace_r = (suffix_2p and #suffix_2p > 0) and suffix_2p;
         elseif span == 3 then
-            replace_r = (suffix_3p and not suffix_3p:is_empty()) and suffix_3p;
+            replace_r = (suffix_3p and #suffix_3p > 0) and suffix_3p;
         else
-            replace_r = (suffix_mp and not suffix_mp:is_empty()) and suffix_mp;
+            replace_r = (suffix_mp and #suffix_mp > 0) and suffix_mp;
         end
         if replace_r then
             if commands then

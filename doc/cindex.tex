@@ -1,0 +1,1086 @@
+\documentclass[class=article,doc={kv-usage}]{cusdoc}
+\IfFontExistsTF{Consolas}
+  {\newfontfamily\consolas{Consolas}[
+    NFSSFamily     = consolas,
+    UprightFont    = *,
+    BoldFont       = *-Bold,
+    ItalicFont     = *-Italic,
+    BoldItalicFont = *-BoldItalic,
+  ]}
+  {\newfontfamily\consolas{cmun}[
+    NFSSFamily     = consolas,
+    Extension      = .otf,
+    UprightFont    = *btl,
+    BoldFont       = *tb,
+    ItalicFont     = *bto,
+    BoldItalicFont = *st,
+    HyphenChar     = None]}
+\DeclareTextFontCommand\textcon{\consolas}
+
+\makeatletter
+\pdfstringdefDisableCommands{\let\textcon\@firstofone}
+\makeatletter
+
+% \usepackage{minted}
+% \newminted[typelua]{lua}{autogobble,fontfamily=consolas}
+
+\usepackage[luarun]{cindexdoc}
+\usepackage{cindexemoji}
+\newcommand*\LUA{\texorpdfstring{\textcon{lua}}{lua}}
+
+\enablecombinedlist
+
+\begin{document}
+
+\section*{目录}
+\templatecombinedlist
+  [section={space.left=2.5em, space.hang=2.5em, width.name=2.5em},
+    subsection={space.left=4em, space.hang=2.5em, width.name=2.5em}]
+  [columns=2,outer-sep=0pt,sep=20pt,ragged,
+    adj,adj-outer={-\dimexpr\paperwidth-1.7cm*2-\textwidth}]
+  {toc}{}
+
+\section{\LUA 类型}\label{sec:lua-types}
+
+\subsection{字符相关}
+
+一般情况下，cindex 中保存数据的类型都能使用 \textcon{== nil} 来判断它是否为无效值。
+
+\begin{luadoc}[global]{Char}
+  \begin{luasyntax}
+    Char(number) -> Char;
+    Char(Char)   -> Char;
+    Char(string) -> Char | nil;
+  \end{luasyntax}
+该类型的构造器。
+返回一个 \luaref{Char}，这是 UTF-32 编码的 Unicode 字符。返回值可能并非有效的 Unicode 字符。
+它与 \textcon{nil} 可进行相等性比较，如果为无效值，则它与 \textcon{nil} 判定为相等（但不可替代 \textcon{nil}）。
+
+如果输入为字符串，则可能返回 \textcon{nil}。如果字符串的第一个字符为有效的 UTF-8 编码的字符，就返回这个字符。
+\end{luadoc}
+
+\begin{luadoc*}{Char}
+# __eq, __lt, __le, __tostring
+\luaref{Char} 实现的元方法。
+\end{luadoc*}
+
+\begin{luadoc*}{Char}
+# is_valid
+! Char.is_valid(self) -> boolean;
+判断是否为有效的 Unicode 字符。
+\end{luadoc*}
+
+\begin{luarun}{}
+local c = Char('汉');
+print(c:is_valid());
+local c = Char(0xDFFF);
+print(c:is_valid(), c == nil);
+\end{luarun}
+
+\begin{luadoc*}{}
+# from_number,to_number
+! Char.from_number(number) -> Char;
+! Char.to_number(self) -> number;
+从数字转为 \luaref{Char} 或转为数字。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# cmp
+! Char.cmp(Char?, Char?) -> number | nil;
+比较两个字符，如果前者小于后者，返回负数，如果大于后者，返回正数，如果相等，返回 0。如果二者之一为 \textcon{nil}，若是字符无效，返回 0，否则返回 \textcon{nil}。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+#<@@=Char> from_string
+! Char.from_string(string) -> (Char | nil, boolean);
+若字符串开头为无效的 UTF-8 序列，则返回 \textcon{nil}，此时第二个返回值总为 \textcon{false}。当输入为有效的 UTF-8 字符串时，第一个返回值总是一个有效的 \luaref{Char}，当字符串只有一个字符时，第二个返回值为 \textcon{true}。
+\end{luadoc*}
+
+\begin{luarun}{}
+print(Char.from_string('汉'));
+print(Char.from_string('汉字'));
+print(Char.from_string('\xFF'));
+\end{luarun}
+
+\begin{luadoc*}{}
+# chars
+! Char.chars(string) -> function() -> Char | nil;
+返回一个迭代器函数，这个函数依次返回 UTF-8 字符串的所有字符。
+\end{luadoc*}
+
+\begin{luarun}{}
+for c in Char.chars('CJK汉字') do
+    print(c);
+end;
+\end{luarun}
+
+\begin{luadoc*}{}
+# has_han_info, han_info
+! Char.has_han_info(self) -> boolean;
+! Char.han_info(self) -> CjkInfo | nil;
+判断该字符是否有 CJK 相关的信息，或获取该信息。
+
+Unicode 区块 CJK Unified Ideographs、CJK Extension A \~{} J、
+CJK Compatibility Ideographs、CJK Compatibility Ideographs Supplement
+中的所有字符必定有此信息，但“〇”（\texttt{U+3007}）不再此列。
+\end{luadoc*}
+
+\begin{luarun}{}
+print(Char('L'):has_han_info());
+print(Char('汉'):has_han_info());
+print(Char('〇'):has_han_info()); -- U+3007
+\end{luarun}
+
+\begin{luadoc*}{}
+# han_ordered_strokes
+! Char.han_ordered_strokes(self) -> OrderedStrokes | nil;
+返回汉字的笔顺。字形为中国大陆字形。
+\end{luadoc*}
+
+\begin{luarun}{}
+print(Char('L'):han_ordered_strokes());
+print(Char('汉'):han_ordered_strokes());
+print(Char('〇'):han_ordered_strokes()); -- U + 3007
+\end{luarun}
+
+\begin{luadoc*}{}
+# script
+! Char.script(self) -> number;
+返回字符所属的 Unicode Script 值，\textcon{number} 为内部句柄，可使用 \luaref[icu.table]{Script} 表查询该值代表的字符串。
+\end{luadoc*}
+
+\begin{luarun}{}
+local icu_data = require("icu.table");
+print(icu_data.Script[ Char('L'):script() ]);
+print(icu_data.Script[ Char('汉'):script() ]);
+print(icu_data.Script[ Char('〇'):script() ]);
+\end{luarun}
+
+\begin{luadoc*}{}
+# general_category
+! Char.general_category(self) -> number;
+返回字符所属的 Unicode General Category 值，\textcon{number} 为内部句柄，可使用 \luaref[icu.table]{GeneralCategory} 表查询该值代表的字符串。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# is_alphabetic, is_numeric, is_math
+! Char.is_alphabetic(self) -> boolean;
+判断字符是否为字母/数字/数学符号，范围涵盖所有 Unicode 字符。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# is_ideographic
+! Char.is_ideographic(self) -> boolean;
+判断字符是否具有 Unicode Ideographic 属性。不单单只有 CJK 字符有此属性。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# simple_fold
+! Char.simple_fold(self) -> Char;
+折叠字符的大小写。字符在折叠大小写之后可进行忽略大小写的比较。
+
+若要对字符串进行忽略大小写的比较，可使用 \luaref[StrRef]{eq_ignore_case}。
+\end{luadoc*}
+
+\begin{luadoc}[global]{StrRef}
+不可变的 UTF-8 编码的字符串。它并不持有这字符串。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# __eq, __lt, __le, __len, __tostring
+\luaref{StrRef} 实现的元方法。它除了可以与另一个 \luaref{StrRef} 进行比较外，还能与 \textcon{string} 进行比较。当它与 \textcon{nil} 比较相等时，仅当它指向空指针时，被判定为与 \textcon{nil} 相等。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# is_nil, is_empty
+! StrRef.is_nil(self) -> boolean;
+\luaref[StrRef]{is_nil} 判断它是否指向空指针，\luaref[StrRef]{is_empty} 当 \luaref[StrRef]{is_nil} 为真或其长度为 0 时返回 \textcon{true}。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# from_ptr, unsafe_new
+! StrRef.from_ptr(const StrRef*) -> StrRef | nil;
+! StrRef.unsafe_new(StrRef | string) -> StrRef;
+! StrRef.unsafe_new(const uint8_t*, size_t?) -> StrRef;
+不安全的构建方法。当它指向的值被销毁后，它本身不一定被销毁，因此可能出现悬垂引用。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# to_string_escaped
+! StrRef.to_string_escaped(self, all: boolean) -> string;
+对部分不可见字符转义后输出。如果第二个参数被视为真，则对所有字符都进行转义。每个字符的转义形式为 \verb|\u{HHHH..}|，使用大写的 16 进制。
+\end{luadoc*}
+
+\begin{luarun}{}
+print(StrRef.unsafe_new('\x1F汉〇L'):to_string_escaped());
+print(StrRef.unsafe_new('\x1F汉〇L'):to_string_escaped(true));
+\end{luarun}
+
+\begin{luadoc*}{}
+# cmp
+! StrRef.cmp(StrRef, StrRef) -> number;
+! StrRef.cmp(StrRef, string) -> number;
+! StrRef.cmp(string, StrRef) -> number;
+比较两个字符串。若前者小于后者，返回负数，若等于，返回 0，若大于，返回正数。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# eq_ignore_case, cmp_ignore_case
+! StrRef.eq_ignore_case (StrRef | string, StrRef | string) -> boolean;
+! StrRef.cmp_ignore_case(StrRef | string, StrRef | string) -> number;
+忽略大小写进行比较。若前者小于后者，返回负数，若等于，返回 0，若大于，返回正数。
+
+某些字符在折叠大小写之后可能是多个字符，因此依次对 \luaref[Char]{simple_fold} 的结果进行比较，其结果并不一定与 \luaref[StrRef]{eq_ignore_case} 返回的值相等。
+\end{luadoc*}
+
+\begin{luarun}{}
+print(StrRef.eq_ignore_case('Ab汉', 'ab汉'));
+print(StrRef.eq_ignore_case('aß', 'ASS'));
+print(StrRef.eq_ignore_case('aß', 'AS'));
+\end{luarun}
+
+\begin{luadoc*}{}
+# slice
+! StrRef.slice(self, start: number, end_: number?) -> StrRef;
+返回从 \textcon{start} 到 \textcon{end_}（不含）的部分，索引从 \textbf{0} 开始。
+如果 \textcon{end_} 未给出或超过字符串的长度，则该值视为字符串的长度。索引以字节为准，而不是字符。
+
+一般来讲，凡是 cindex 的类型，它们的方法使用到索引时，都是从 0 开始，若是需要数字的范围，则都是前闭后开的。
+\end{luadoc*}
+
+\begin{luarun}{}
+print(StrRef.unsafe_new('CJK汉字'):slice(1, 6));
+\end{luarun}
+
+\begin{luadoc*}{}
+# head
+! StrRef.head(StrRef | string) -> number | nil;
+返回字符串的第一个字符。
+\end{luadoc*}
+
+\begin{luarun}{}
+print(StrRef.unsafe_new('汉字'):head());
+\end{luarun}
+
+\begin{luadoc*}{}
+# chars
+! StrRef.chars(self) -> function() -> number | nil;
+返回一个迭代器函数，这个函数依次返回 UTF-8 字符串的所有字符。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# lines
+! StrRef.lines(self) -> function() -> StrRef | nil;
+返回一个迭代器函数，这个函数依次返回 UTF-8 字符串的所有行。行结束符不会包含在结果字符串中。
+\end{luadoc*}
+
+\begin{luarun}{}
+local s = "abc\n汉字\n什么";
+for line in StrRef.unsafe_new(s):lines() do
+    print(line);
+end
+\end{luarun}
+
+\begin{luadoc*}{}
+# split
+! StrRef.split(self, pattern: nil | Char | StrRef | string)
+!@            -> function() -> StrRef | nil;
+返回一个迭代器函数，这个函数依次返回 UTF-8 字符串的子串。分割方式由 \textcon{pattern} 指定。
+
+如果模式为 \textcon{nil}，则按连续的 ASCII 空白分割，此时，它\textbf{总不返回空串}；
+否则按指定的字符或字符串分割。如果字符串以 \textcon{pattern} 结尾，那么最后一项就是这个 \textcon{pattern} 之前的部分子串。
+
+如果输入为空串，则返回的第一个值就是 \textcon{nil}。
+\end{luadoc*}
+
+\begin{luarun}{}
+local s = "::std::os::ffi::";
+for part in StrRef.unsafe_new(s):split("::") do
+    print(part);
+end
+\end{luarun}
+
+\begin{luarun}{}
+local s = "  std  os ffi \n ";
+for part in StrRef.unsafe_new(s):split() do
+    print(part);
+end
+\end{luarun}
+
+\begin{luadoc*}{}
+# graphemes
+! StrRef.graphemes(self) -> function() -> StrRef | nil;
+返回一个迭代器函数，这个函数依次返回每个 \href{https://www.unicode.org/reports/tr29/#Grapheme_Cluster_Boundaries}{Grapheme Cluster}。
+\end{luadoc*}
+
+\begin{luarun}{}
+local s = "ABC汉字。";
+for cluster in StrRef.unsafe_new(s):graphemes() do
+    print(cluster);
+end
+\end{luarun}
+
+\begin{luadoc*}{}
+# unicode_words
+! StrRef.unicode_words(self) -> function() -> StrRef | nil;
+返回一个迭代器函数，这个函数依次返回每个单词。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# split_word_bounds
+! StrRef.split_word_bounds(self) -> function() -> StrRef | nil;
+返回一个迭代器函数，这个函数返回一个根据 \href{https://www.unicode.org/reports/tr29/#Word_Boundaries}{Word Boundaries} 分隔开来的子串。
+\end{luadoc*}
+
+\begin{luarun}{}
+local s = [[ABC: (“汉字”)。]];
+for word in StrRef.unsafe_new(s):unicode_words() do
+    print(word);
+end
+\end{luarun}
+
+\begin{luarun}{}
+local s = [[ABC: (“汉字”)。]];
+for part in StrRef.unsafe_new(s):split_word_bounds() do
+    print(part);
+end
+\end{luarun}
+
+\begin{luadoc*}{}
+# trim_ascii_spaces
+! StrRef.trim_ascii_spaces() -> StrRef | nil;
+! StrRef.trim_ascii_spaces(start: boolean) -> StrRef | nil;
+! StrRef.trim_ascii_spaces(start: boolean, end: boolean) -> StrRef | nil;
+返回删除字符串前后空格的结果。如果是有效的字符串，不会返回 \textcon{nil}。默认情况下，前后的空格都被删除。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# is_emoji
+! StrRef.is_emoji(self) -> boolean;
+判断字符串是否为 Emoji 序列，有的 Emoji 是由多个 Unicode 字符组成。
+\end{luadoc*}
+
+\begin{luarun}{}
+print(#"😂", StrRef.unsafe_new("😂"):is_emoji());
+print(#"🇨🇳", StrRef.unsafe_new("🇨🇳"):is_emoji());
+print(#"🤦🏻‍♀️", StrRef.unsafe_new("🤦🏻‍♀️"):is_emoji());
+print(#"👩🏻‍❤️‍💋‍👨🏻", StrRef.unsafe_new("👩🏻‍❤️‍💋‍👨🏻"):is_emoji());
+print(#"汉", StrRef.unsafe_new("汉"):is_emoji());
+print(#"L", StrRef.unsafe_new("L"):is_emoji());
+\end{luarun}
+
+\begin{luadoc}[global]{CjkInfo}
+保存 CJK 相关的信息。这个类型拥有其数据。一般通过 \luaref[Char]{han_info} 获取。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# __eq, __tostring
+实现的元方法。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# radical_from_kind
+! CjkInfo.radical_from_kind(kind: StrRef | string) -> number | nil;
+从康熙部首的种类返回其康熙部首的内部表示。种类是 \href{https://www.unicode.org/Public/UCD/latest/ucd/CJKRadicals.txt}{Unicode CJKRadicals.txt 数据}的第一列，一般是 1 \~{} 214 的数字，有的还可带 1 至 3 个西文单引号，如 \textcon{123}，\textcon{213''} 分别表示第 123 个康熙部首，以及第 213 个康熙部首的第 2 个变体。
+\end{luadoc*}
+
+\begin{luarun}{}
+  print(true)
+\end{luarun}
+
+\begin{luadoc*}{}
+# is_nil
+! CjkInfo.is_nil(self) -> boolean;
+判断是否为无效值。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# contains_char
+! CjkInfo.contains_char(Into<Char>) -> boolean;
+判断字符是否有 CJK 信息。它与 \luaref[Char]{has_han_info} 完全一致。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# kx_radical_char
+! CjkInfo.kx_radical_char(self) -> Char;
+返回康熙部首的具体字符，这字符位于 Unicode 的康熙部首相关区块。某些康熙部首的变体在康熙部首相关区块中没有对应值，因此，返回的字符可能无效。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# kx_ideography_char
+! CjkInfo.kx_ideography_char(self) -> Char;
+返回康熙部首的具体字符，这字符位于 Unicode 的 CJK 表意字相关区块。所有康熙部首及其变体在表意字区块都有对应值，因此有效的 \luaref{CjkInfo} 总返回有效的字符。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# kangxi_radical_number
+! CjkInfo.kangxi_radical_number(self) -> number | nil;
+返回康熙部首的号码，目前的返回值为 1 \~{} 214。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# kangxi_radical_ideography_slot
+! CjkInfo.kangxi_radical_ideography_slot(self)
+!@                                      -> number | nil;
+返回康熙部首在 CJK 表意字区块中的对应值的代码点。康熙部首的变体被映射为原始的 214 个部首。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# kx_radical_kind
+! CjkInfo.kx_radical_kind(self) -> StrRef | nil;
+返回康熙部首的字符串表示。由数字和末尾的 0 \~ 3 个 \textcon{'} 组成。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# ucd_additional_strokes
+! CjkInfo.ucd_additional_strokes(self) -> number;
+返回 Unicode 数据中该字符除部首外的笔画数，该值\textbf{可能为负数}。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# ucd_total_strokes
+! CjkInfo.ucd_total_strokes(self) -> number;
+返回 Unicode 数据中该字符的总笔画数。这与所选字形无关，另见 \luaref[CjkInfo]{total_strokes}。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# total_strokes
+! CjkInfo.total_strokes(self) -> number;
+返回字符的总笔画数。不同字形标准，总笔画数可能不同，该函数使用中国大陆字形标准。它的值不一定和 \luaref[CjkInfo]{ucd_total_strokes} 返回的一致。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# original_radical
+! CjkInfo.original_radical(self) -> number | nil;
+如果是康熙部首的变体，则返回其原始的康熙部首的内部表示，若就是原始部首，则返回原始部首的内部表示。对于有效的内部值，总是不返回 \textcon{nil}。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# mandarin
+! CjkInfo.mandarin(self) -> nil | (StrRef, number);
+如果该字符有拼音信息，第一个返回值是它最常见的拼音，第二个返回值是它的声调。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# cantonese
+! CjkInfo.cantonese(self) -> nil | (StrRef, number);
+如果该字符有粤语拼音信息，第一个返回值是它最常见的拼音，第二个返回值是它的声调。
+\end{luadoc*}
+
+\begin{luadoc}[global]{Emoji}
+  \begin{luasyntax}
+    Emoji(string | StrRef) -> Emoji | nil;
+  \end{luasyntax}
+如果字符串是一个有效的 Emoji 序列，则返回这个 Emoji，Emoji 类型是 Owned。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# __tostring
+把 emoji 转为字符串。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# name
+! Emoji.name(self) -> StrRef | nil;
+返回 emoji 的名称。一般情况下该方法不会返回 \textcon{nil}。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# group
+! Emoji.group(self) -> number;
+返回 emoji 组别的内部表示。可使用 \luaref[icu.table]{EmojiGroup} 获取组别的名字。
+\end{luadoc*}
+
+\begin{luadoc}[global]{OrderedStrokes}
+汉字的笔画。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# __len, __eq, __lt, __gt, __ipairs
+\luaref{OrderedStrokes} 实现的元方法。\luaref{__ipairs} 返回的索引号从 1 开始。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# __tostring
+转为字符串的形式。字符串的每一项都是 1 \~{} 5 的某个数字，按顺序分别代表：横、竖、撇、点（捺）、折（弯钩）。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# __index, get
+! OrderedStrokes[number] -> number;
+! OrderedStrokes.get(n: number) -> number;
+获取第 $n$ 画。$n$ 从 0 开始。数字为 1 \~{} 5 的某个数字，按顺序分别代表：横、竖、撇、点（捺）、折（弯钩）。
+\end{luadoc*}
+
+
+\subsection{索引条目}
+
+\begin{luadoc}[global]{IndexEntryRef}
+未合并的索引。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# __eq
+\luaref{IndexEntryRef} 可以与 \textcon{nil} 进行比较，当其为无效值时，被视为与 \textcon{nil} 相等。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# is_nil
+! IndexEntryRef.is_nil(self) -> boolean;
+判断是否为 \textcon{nil}。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# to_handle
+! IndexEntryRef.to_handle(self) -> number;
+返回一个句柄。一般来讲，\luaref{IndexEntryRef} 是不能作为数字的索引的，可转为句柄。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# levels_count
+! IndexEntryRef.levels_count(self) -> number;
+返回此条目的层级数。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# key_n, keys
+! IndexEntryRef.key_n(self, n: number) -> StrRef | nil;
+! IndexEntryRef.keys(self) -> function() -> StrRef | nil;
+返回该条目第 $n$ 个排序关键字，$n$ 从 0 开始。或返回一个迭代器函数。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# as_table
+! IndexEntryRef.as_table(self) -> table;
+! table := {
+!@  levels: { { key?: string, display: string }, .. },
+!@  range?: "None" | "Open" | "Close",
+!@  page_commands?: string,
+!@  pages?: { { kind: string, value: number }, .. },
+!@  pages_raw?: string,
+! }
+把条目表示为 \LUA 表。当前 \textcon{kind} 的值有：
+\begin{itemize}
+  \item\textcon{Arabic}（阿拉伯数字），
+  \item\textcon{alpha}（小写拉丁字母组成的 26 进制数字），
+  \item\textcon{Alpha}（大写拉丁字母组成的 26 进制数字），
+  \item\textcon{roman}（小写罗马数字），
+  \item\textcon{Roman}（大写罗马数字），
+  \item\textcon{ZhDigits}（中文数串，由“零〇一二三四五六七八九”组成），
+  \item\textcon{ZhNumber}（中文数字）。
+\end{itemize}
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# is_same
+! IndexEntryRef.is_same(lhs, rhs) -> boolean;
+判断两个条目的排序关键字是否完全相等。
+\end{luadoc*}
+
+\begin{luadoc}[global]{IndexEntryArray}
+存储索引条目的数组。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# __len, __ipairs
+\luaref{IndexEntryArray} 实现的元方法。\textcon{__ipairs} 返回的索引数字从 1 开始。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# is_nil, is_empty
+! IndexEntryArray.is_nil(self) -> boolean;
+! IndexEntryArray.is_empty(self) -> boolean;
+判断数组是否为无效值，或其不含任何值。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# __index, get
+! IndexEntryArray[number] -> IndexEntryRef;
+! IndexEntryArray.get(self, index: number) -> IndexEntryRef;
+用数字索引数组，索引从 0 开始。若索引大于或等于数组的长度，\luaref{IndexEntryRef} 并非一个有效值，可使用 \textcon{== nil} 或 \luaref[IndexEntryRef]{is_nil} 来判断是否有效。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# push
+! IndexEntryArray.push(self, IndexEntryRefMut);
+! IndexEntryArray.push(self, table);
+在数组末尾附加一个条目。\textcon{table} 必须能转为合法的 \luaref{IndexEntryRefMut}，表的结构与 \luaref[IndexEntryRef]{as_table} 返回的一致。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# extend_from_iterator
+! IndexEntryArray.extend_from_iterator(self, init);
+! init := function() ->
+!@                function() -> IndexEntryRefMut | table | nil;
+把迭代器返回的每一项附加到数组中。\textcon{init} 返回一个迭代器函数。
+\end{luadoc*}
+
+\begin{luadoc}[global]{IndexEntryRefMut}
+  \begin{luasyntax}
+    IndexEntryRefMut()                 -> IndexEntryRefMut;
+    IndexEntryRefMut(table)            -> IndexEntryRefMut;
+    IndexEntryRefMut(IndexEntryRef)    -> IndexEntryRefMut;
+    IndexEntryRefMut(IndexEntryRefMut) -> IndexEntryRefMut;
+  \end{luasyntax}
+\luaref{IndexEntryRefMut} 的构造函数。它创建一个新的空索引条目，或从传入的参数中构造出一个新的索引条目。\textcon{table} 的结构和 \luaref[IndexEntryRef]{as_table} 返回的一致。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# push_level
+! IndexEntryRefMut.push_level(self, key: nil, display: string | StrRef)
+!@                           -> boolean;
+! IndexEntryRefMut.push_level(self, level: string | StrRef)
+!@                           -> boolean;
+! IndexEntryRefMut.push_level(self, key: string, display: string)
+!@                           -> boolean;
+! IndexEntryRefMut.push_level(self, key: StrRef, display: StrRef)
+!@                           -> boolean;
+在条目中插入一个层级。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# set_range
+! IndexEntryRefMut.set_range(self, range?: StrRef | string) -> boolean;
+设置本条目是否是页码范围的起始或结束位置。\textcon{range} 可选值为 \textcon{None}、\textcon{Open}、\textcon{Close}，如果不设置，则相当于 \textcon{None}。返回值表示是否成功设置。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# set_page_commands
+! IndexEntryRefMut.set_page_commands(
+!@  self,
+!@  page_commands?: StrRef | string
+!@) -> boolean;
+设置本条目页码要使用的命令。如果未给出或为 \textcon{nil}，相当于清除已经设置的命令。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# push_page
+! IndexEntryRefMut.push_page(
+!@  self,
+!@  kind: StrRef | string,
+!@  value: Into<number>
+!@) -> boolean;
+向本条目中插入一个页码段。页码种类如 \luaref[IndexEntryRef]{as_table} 所列。
+
+一个条目能同时使用多级页码，如 \texttt{MMMMI-2026-c-8}，就依次使用了 \textcon{Roman}，\textcon{Arabic}，\textcon{alpha}，\textcon{Arabic} 四级页码，但只算作一个页码。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# set_pages_raw
+! IndexEntryRefMut.set_pages_raw(self, pages_raw: StrRef | string)
+!@                              -> boolean;
+设置页码的显示效果。在写入到输出文件时，总是使用这个值，页码的具体数值只用于排序等情形，因此它可以不和具体的值挂钩。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# as_table
+! IndexEntryRefMut.as_table(self) -> table;
+转为 \LUA 表，它本身的值保持不变。表的结构与 \luaref[IndexEntryRef]{as_table} 返回的一致。
+\end{luadoc*}
+
+\begin{luadoc}[global]{MergedEntryRef}
+合并后的索引条目。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# __eq, is_nil, to_handle
+! MergedEntryRef.is_nil(self) -> boolean;
+! MergedEntryRef.to_handle(self) -> number;
+\luaref[MergedEntryRef]{is_nil} 用于判断是否为无效值。\luaref[MergedEntryRef]{to_handle} 用于把条目转为内部句柄。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# levels_count, level_n, levels
+! MergedEntryRef.levels_count(self) -> number;
+! MergedEntryRef.level_n(self, n: number) -> StrRef | nil;
+! MergedEntryRef.levels(self)
+!@                     -> function() -> StrRef | nil;
+返回条目的层级数，或返回对应的层级。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# key_n, keys
+! MergedEntryRef.key_n(self, n: number) -> StrRef | nil;
+! MergedEntryRef.keys(self) -> function() -> StrRef | nil;
+返回条目的排序关键字。关键字的个数个层级数一致。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# pages_count
+! MergedEntryRef.pages_count(self) -> number;
+返回合并后的索引条目包含的页码（或页码区间）数量。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# page_command_n, page_commands
+! MergedEntryRef.page_command_n(self, n: number) -> StrRef | false | nil;
+! MergedEntryRef.page_commands(self) -> function() -> StrRef | false | nil;
+返回合并后的索引条目的页码在输出时要使用的命令。如果页码没有设置命令，返回 \textcon{false}。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# pages_raw_n, pages_raw
+! MergedEntryRef.pages_raw_n(self, n: number)
+!@                          -> nil | StrRef | (StrRef, StrRef);
+! MergedEntryRef.pages_raws(self)
+!@            -> function() -> nil | StrRef | (StrRef, StrRef);
+返回页码要输出的原始字符串。如果是单个页码则返回一个 \luaref{StrRef}，如果是页码区间，则返回两个 \luaref{StrRef}。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# page_span_n, page_spans
+! MergedEntryRef.page_span_n(self, n: number) -> number;
+! MergedEntryRef.page_spans(self) -> function() -> number | nil;
+返回页码区间的长度。如果是无效页码，返回 0，如果是单个页码，返回 1，否则返回区间的长度。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# max_same_key
+! MergedEntryRef.max_same_key(MergedEntryRef, MergedEntryRef) -> number;
+返回两个条目拥有的相同排序键的个数。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# as_table
+! MergedEntryRef.as_table(self) -> table;
+! table := {
+!@  levels: { { key?: string, display: string }, .. },
+!@  pages?: { page_entry, .. },
+! }
+! page_entry := {
+!@  kind: "single",
+!@  page_command: nil | string,
+!@  pages: { { kind: string, value: number }, .. },
+!@  pages_raw: string,
+! } | {
+!@  kind: "range",
+!@  page_command: nil | string,
+!@  start: { { kind: string, value: number }, .. },
+!@  start_raw: string,
+!@  end: { { kind: string, value: number }, .. },
+!@  end_raw: string,
+! }
+以 \LUA 表的形式表示该条目。页码的种类见 \luaref[IndexEntryRef]{as_table}。
+\end{luadoc*}
+
+
+\subsection{实用类型}
+
+\begin{luadoc}[path=Logger]{error,warn,info,debug,trace}
+  \begin{luasyntax}
+    Logger.error(string | StrRef) -> boolean;
+  \end{luasyntax}
+在日志中写入对应级别的信息。
+\end{luadoc}
+
+\begin{luadoc}[global]{IstInputStyle}
+  \begin{luasyntax}
+    IstInputStyle: const table;
+  \end{luasyntax}
+索引的输入格式。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# is_nil
+! IstInputStyle.is_nil(self) -> boolean;
+判断是否不存在任何输入格式。一般情况下，输入格式都是存在的。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# keyword, arg_open, arg_close, range_open, range_close, level, actual, encap, quote, escape, page_compositor, comment, separator
+! IstInputStyle.keyword() -> StrRef | nil;
+返回输入格式对应关键字的值。
+\end{luadoc*}
+
+\begin{luadoc}[global]{IstOutputStyle}
+  \begin{luasyntax}
+    IstOutputStyle: const table;
+  \end{luasyntax}
+索引的输出格式。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# is_nil
+! IstOutputStyle.is_nil(self) -> boolean;
+判断是否不存在任何输出格式。一般情况下，输出格式都是存在的。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# preamble, postamble, group_skip, heading_prefix, heading_suffix, headings_flag, numhead_positive, numhead_negative, symhead_positive, symhead_negative, item_0, item_1, item_2, item_01, item_x1, item_12, item_x2, delim_0, delim_1, delim_2, delim_n, delim_r, delim_t, encap_prefix, encap_infix, encap_suffix, page_precedence, suffix_2p, suffix_3p, suffix_mp, stroke_prefix, stroke_suffix, radical_prefix, radical_suffix, radical_simplified_flag, radical_simplified_prefix, radical_simplified_delimiter, radical_simplified_suffix
+! IstOutputStyle.preamble() -> StrRef | nil;
+返回输出格式对应关键字的值。
+\end{luadoc*}
+
+\begin{luadoc}{CliOptions}
+  \begin{luasyntax}
+    CliOptions: const {
+   @  c: boolean,
+   @  q: boolean,
+   @  r: boolean,
+   @  strict: boolean,
+   @  z?: string,
+   @  extra_options?: { string, .. },
+    };
+  \end{luasyntax}
+命令行选项。\textcon{extra_options} 是命令行参数 \textcon{--} 之后的内容。
+\end{luadoc}
+
+\begin{luadoc}[path=CIndex]{Util,Ideographic,Entry}
+  \begin{luasyntax}
+    CIndex.Util: const table;
+    CIndex.Ideographic: const table;
+    CIndex.Entry: const table;
+  \end{luasyntax}
+cindex 提供的实用模块。
+\end{luadoc}
+
+\begin{luadoc*}{CIndex.Util}
+# is_ctype
+! CIndex.Util.is_ctype(type, value) -> boolean;
+判断某个值是否为某个 cindex 类型。无法判别所有 \LUA 原生类型。
+
+例如，\textcon{CIndex.Ideographic.is_ctype(StrRef, s)} 即判断 \textcon{s} 是否为 \luaref{StrRef} 类型。
+\end{luadoc*}
+
+\begin{luadoc*}{CIndex.Util}
+# table_to_json_string
+! CIndex.Util.table_to_json_string(table) -> string;
+把表转为 JSON 字符串。
+\end{luadoc*}
+
+\begin{luadoc*}{CIndex.Util}
+# value_from_json_string
+! CIndex.Util.value_from_json_string(string) -> ??;
+把 JSON 字符串转为某个 \LUA 基本类型。
+\end{luadoc*}
+
+\begin{luadoc*}{CIndex.Ideographic}
+# group_by_pinyin, group_by_bihua, group_by_bushou
+! CIndex.Ideographic.group_by_pinyin(Char) -> string;
+返回字符按拼音/笔画数/部首的组别，组别见 \luaref[cindex.table]{GroupOrder}。
+
+如果字符不位于 CJK 表意字相关区块或没有对应信息，则返回 \textcon{Symbols}，即认为它是符号组。
+
+除了 CJK 表意字相关区块的字符外，还识别\cref{tab:extra-chars} 补充的字符的信息。
+\end{luadoc*}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{c >{\ttfamily}l c c l}
+  \toprule
+  字符 & {\normalfont 代码点} & 拼音 & 部首 & 笔顺 \\ \midrule
+    〇 & U+3007 & \pinyin{ling2} & 乙（5） & 5 \\
+  \bottomrule
+  \end{tabular}
+  \caption{补充的字符信息}\label{tab:extra-chars}
+\end{table}
+
+\begin{luadoc*}{CIndex.Entry}
+# compare_by_default, compare_by_pinyin, compare_by_bihua, compare_by_bushou
+! CIndex.Entry.compare_by_default(MergedEntryRef, MergedEntryRef)
+!@                               -> boolean;
+根据指定的比较算法比较两个条目，如果前者应当排在后者之前，则返回 \textcon{true}。
+
+总体来说，cindex 首先进行忽略大小写的比较，若相等，再区分大小写进行比较，顺序按照 Unicode 的顺序。若汉字与非汉字进行比较，总是非汉字排在前面，而不考虑它们在 Unicode 中的顺序。
+
+使用读音排序时，没有读音数据的字符（包括生僻字）一律排在有读音的字符之前，汉字按其
+最常用读音比较，读音相同汉字的按 Unicode 编码排序。
+
+使用笔画数和笔顺排序时，笔画数小的排在前面，笔画数相同的，按横、竖、撇、点（捺）、折的顺序
+逐笔画比较，仍然相同的按 Unicode 编码排序；生僻汉字没有笔顺信息的，排在同笔画数有笔顺的字后面。
+
+使用部首和除部首笔画数排序时，部首按康熙字典 214 部首顺序排列，部首和笔画数相同的按
+Unicode 编码排序。
+\end{luadoc*}
+
+
+\subsection{PCRE2 正则表达式}
+
+\href{https://pcre2project.github.io/pcre2/}{PCRE2} 是 C 语言实现正则表达式库。关于它的相关信息和语法，见 \url{https://pcre2project.github.io/pcre2/doc/}。
+
+cindex 对其做了简单封装。
+
+\begin{luadoc}[global]{Regex}
+  \begin{luasyntax}
+    Regex(string | StrRef | const uint8_t*, options: number) -> Regex;
+  \end{luasyntax}
+创建一个正则表达式。无效的模式直接报错。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# jit_compile
+! Regex.jit_compile(self) -> true | (false, string);
+尝试使用 JIT 编译。返回是否成功。如果为 \textcon{false}，还返回相关错误码。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# is_match
+! Regex.is_match(self, subject: StrRef | string) -> boolean;
+检查 \textcon{subject} 是否匹配正则表达式。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# find
+! Regex.find(self, subject: StrRef, start_pos: number) -> StrRef | nil;
+! Regex.find(self, subject: string, start_pos: number) -> string | nil;
+从字符串的 \textcon{start_pos} 位置开始，查找匹配该的正则表达式的子串并返回。不论是 \luaref{StrRef} 还是 \textcon{string}，索引均从 0 开始。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# captures
+! Regex.captures(self, subject: StrRef, start_pos: number)
+!@              -> nil | { [number] = StrRef, [string] = StrRef, .. };
+! Regex.captures(self, subject: string, start_pos: number)
+!@              -> nil | { [number] = string, [string] = string, .. };
+查找并返回字符串的捕获组。第 0 个索引是匹配的子串。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# gmatch
+! Regex.gmatch(self, subject: StrRef, start_pos: number)
+!@            -> nil | { [number] = StrRef, [string] = StrRef, .. };
+! Regex.gmatch(self, subject: string, start_pos: number)
+!@            -> nil | { [number] = string, [string] = string, .. };
+返回一个迭代器函数，其返回值依次是匹配的捕获。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# gsub
+! Regex.gsub(
+!@  self,
+!@  subject: StrRef | string,
+!@  replacement: StrRef | string,
+!@  options?: number,
+!@  once?: boolean;
+! ) -> string;
+以正则表达式 \textcon{replacement} 替换 \textcon{subject} 中匹配的内容。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# Constant
+! Regex.Constant: const { [string] = number, .. };
+这个表保存一些 PCRE2 定义的常量。
+\end{luadoc*}
+
+\begin{luadoc*}{Regex.Constant}
+# UNSET, ZERO_TERMINATED
+! Regex.Constant.UNSET: number;
+\end{luadoc*}
+
+\begin{luadoc*}{Regex.Constant}
+# ALLOW_EMPTY_CLASS, ALT_BSUX, AUTO_CALLOUT, CASELESS, DOLLAR_ENDONLY, DOTALL, DUPNAMES, EXTENDED, FIRSTLINE, MATCH_UNSET_BACKREF, MULTILINE, NEVER_UCP, NEVER_UTF, NO_AUTO_CAPTURE, NO_AUTO_POSSESS, NO_DOTSTAR_ANCHOR, NO_START_OPTIMIZE, UCP, UNGREEDY, UTF, NEVER_BACKSLASH_C, ALT_CIRCUMFLEX, ALT_VERBNAMES, USE_OFFSET_LIMIT, EXTENDED_MORE, LITERAL, MATCH_INVALID_UTF, ALT_EXTENDED_CLASS
+! Regex.Constant.ALLOW_EMPTY_CLASS: number;
+\end{luadoc*}
+
+\begin{luadoc*}{Regex.Constant}
+# NOTBOL, NOTEOL, NOTEMPTY, NOTEMPTY_ATSTART, PARTIAL_SOFT, PARTIAL_HARD, DFA_RESTART, DFA_SHORTEST, SUBSTITUTE_GLOBAL, SUBSTITUTE_EXTENDED, SUBSTITUTE_UNSET_EMPTY, SUBSTITUTE_UNKNOWN_UNSET, SUBSTITUTE_OVERFLOW_LENGTH, NO_JIT, COPY_MATCHED_SUBJECT, SUBSTITUTE_LITERAL, SUBSTITUTE_MATCHED, SUBSTITUTE_REPLACEMENT_ONLY
+! Regex.Constant.NOTBOL: number;
+\end{luadoc*}
+
+\begin{luadoc*}{Regex.Constant}
+# INFO_ALLOPTIONS, INFO_ARGOPTIONS, INFO_BACKREFMAX, INFO_BSR, INFO_CAPTURECOUNT, INFO_FIRSTCODEUNIT, INFO_FIRSTCODETYPE, INFO_FIRSTBITMAP, INFO_HASCRORLF, INFO_JCHANGED, INFO_JITSIZE, INFO_LASTCODEUNIT, INFO_LASTCODETYPE, INFO_MATCHEMPTY, INFO_MATCHLIMIT, INFO_MAXLOOKBEHIND, INFO_MINLENGTH, INFO_NAMECOUNT, INFO_NAMEENTRYSIZE, INFO_NAMETABLE, INFO_NEWLINE, INFO_DEPTHLIMIT, INFO_RECURSIONLIMIT, INFO_SIZE, INFO_HASBACKSLASHC, INFO_FRAMESIZE, INFO_HEAPLIMIT, INFO_EXTRAOPTIONS
+! Regex.Constant.INFO_ALLOPTIONS: number;
+\end{luadoc*}
+
+
+\section{可加载的外部库}
+
+cindex 对加载外部 \LUA 文件和库做了限制，目前只允许加载某些特定的库。
+
+\subsection{\textcon{cindex.table}}
+
+\begin{luadoc}[global]{cindex.table}
+cindex 的相关表。可使用 \textcon{require("cindex.table")} 加载。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# GroupOrder
+! cindex.table.GroupOrder: const {
+!@  "nil" = 0,
+!@  "Symbols" = ??,
+!@  "Numbers" = ??,
+!@  "A" = ??, .., "Z" = ??,
+!@  "BiHua1" = ??, .., "BiHua64" = ??,
+!@  "BuShou1" = ??, .., "BuShou214" = ??,
+!@  [number] = string, ..
+!};
+cindex 默认的各个组别及其排序。\textcon{Symbols} 是符号分组，\textcon{Numbers} 是数字分组，\textcon{BiHua..} 是笔画数分组，\textcon{BuShou..} 是康熙部首分组。每个分组对应一个数字。也可通过数字反查对应的组别名。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# BiHuaToGroup
+! BiHuaToGroup: const { [1] = string, .., [64] = string };
+根据笔画数返回组别名。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# BuShouToGroup
+! BuShouToGroup: const { [number] = string, .. }
+根据康熙部首的代码点（包括康熙部首相关区块和表意字相关区块）值返回组别名。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# BuShouToChars
+! BuShouToChars: const {
+!@  [1] = { number, .. }, .., [214] = { number, .. },
+!@  ["BuShou1"] = { number, .. }, .., ["BuShou214"] = { number, .. },
+! };
+康熙部首对应的表意字字符，如果有变体，则依次存储在对应的表中。
+\end{luadoc*}
+
+
+\subsection{\textcon{icu.table}}
+
+\begin{luadoc}[global]{icu.table}
+\luaref{icu.table} 保存 Unicode 相关的信息。可使用 \textcon{require("icu.table")} 加载。
+\end{luadoc}
+
+\begin{luadoc*}{}
+# Script
+! Script = { [number] = string, [string] = number, .. }
+\luaref[Char]{script} 返回的句柄可用于索引此表。也可通过字符串反查对应的句柄。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# GeneralCategory
+! GeneralCategory = { [number] = string, [string] = number, .. }
+\luaref[Char]{general_category} 返回的句柄可用于索引此表。也可通过字符串反查对应的句柄。
+\end{luadoc*}
+
+%% @ 等于 \leavevmode
+\begin{luadoc*}{}
+# EmojiGroup
+! EmojiGroup = { [number] = group, [string] = number, .. }
+! group := | "Activities"
+!@         | "Animals And Nature"
+!@         | "Flags"
+!@         | "Food And Drink"
+!@         | "Objects"
+!@         | "People And Body"
+!@         | "Smileys And Emotion"
+!@         | "Symbols"
+!@         | "Travel And Places"
+!@         | ??
+Emoji 的分组。目前共有 9 个组别。
+\end{luadoc*}
+
+\begin{luadoc*}{}
+# PropertyShortNames
+! PropertyShortNames = { [string] = string, .. }
+属性值对应的短名。
+\end{luadoc*}
+
+
+\subsection{\textcon{digest} 哈希算法}
+
+
+\subsection{\textcon{LPeg}}
+
+\href{https://www.inf.puc-rio.br/~roberto/lpeg/lpeg.html}{\textcon{LPeg}} 是基于 Parsing Expression Grammars 的模式匹配库。
+cindex 内置了此库，可使用 \textcon{require("lpeg")} 加载。详细用法见 \url{https://www.inf.puc-rio.br/~roberto/lpeg/lpeg.html}。
+
+
+\setuplayout{preset=balance}
+\printindex[docusage,multi={ragged,sep=1em,outer-skip=0pt,cols=2}]
+
+\end{document}
