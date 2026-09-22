@@ -136,3 +136,5 @@ This repository contains and/or incorporates third-party software and data. Thes
     * [LICENSE](https://github.com/yi-bai/ids/blob/main/LICENSE)
 - lpeg-1.1.0：https://www.inf.puc-rio.br/~roberto/lpeg/lpeg-1.1.0.tar.gz
     * [LICENSE](https://www.inf.puc-rio.br/~roberto/lpeg/#license)
+- argparse-0.7.2：https://github.com/luarocks/argparse/blob/master
+    * [LICENSE](https://github.com/luarocks/argparse/blob/master/LICENSE)

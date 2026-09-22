@@ -91,6 +91,8 @@ cindex 是通用的索引制作工具，它的作用类似于 makeindex 和 zhma
 
 不像 zhmakeindex，在没有提供格式文件的情况下，cindex 并\textbf{不}寻找默认的格式文件，而是直接使用程序的默认设置。
 
+cindex 支持多级索引，默认的实现支持至多 5 级，与之相比，makeindex/zhmakeindex 只支持最多 3 级。若使用 \LUA 定制，则层级没有限制，由具体的格式决定。
+
 cindex 只接受 UTF-8 编码的文件，不论是格式文件，亦或是输入输出文件，必须使用 UTF-8 编码。
 
 
@@ -209,7 +211,7 @@ TEXMF 树中由 \pkg{kpathsea} 库查找。一个格式文件由一组 \meta{关
 \endhead
   \bottomrule
 \endfoot
-  \kw{keyword}  & \字符串 & \V{"\\indexentry"} & 索引关键字 \\
+  \kw{keyword}  & \字符串 & \V{"\\\\indexentry"} & 索引关键字 \\
   \kw{arg_open}  & \字符 & \V{'\{'} & 参数的开定界符 \\
   \kw{arg_close}  & \字符 & \V{'\}'} & 参数的闭定界符 \\
   \kw{range_open}  & \字符 & \V{'('} & 页码范围的开定界符 \\
@@ -218,7 +220,7 @@ TEXMF 树中由 \pkg{kpathsea} 库查找。一个格式文件由一组 \meta{关
   \kw{actual}  & \字符 & \V{'@'} & （区别于排序项的）实际输出项标志符 \\
   \kw{encap}  & \字符 & \V{'|'} & 页码和特殊命令指示符 \\
   \kw{quote}  & \字符 & \V{'"'} & 引号（转义符） \\
-  \kw{escape}  & \字符 & \V{'\\'} & 转义 \V{quote} 的符号，在它后面的引号不作转义符
+  \kw{escape}  & \字符 & \V{'\\\\'} & 转义 \V{quote} 的符号，在它后面的引号不作转义符
 解释 \\
   \kw{page_compositor} &  \字符串 & \V{"-"} & 复合页码分隔符 \\
 \end{xltabular}
@@ -252,9 +254,9 @@ TEXMF 树中由 \pkg{kpathsea} 库查找。一个格式文件由一组 \meta{关
 \endhead
 \bottomrule
 \endfoot
-  \kw{preamble} &  \字符串 & \V{"\\begin{theindex}\n"} & 索引导言代码\\
-  \kw{postamble} &  \字符串 & \V{"\n\n\\end{theindex}\n"} & 索引末尾代码\\
-  \kw{group_skip} &  \字符串 & \V{"\n\n\ \ \\indexspace\n"} & 组间垂直间距\\
+  \kw{preamble} &  \字符串 & \V{"\\\\begin{theindex}\n"} & 索引导言代码\\
+  \kw{postamble} &  \字符串 & \V{"\n\n\\\\end{theindex}\n"} & 索引末尾代码\\
+  \kw{group_skip} &  \字符串 & \V{"\n\n\ \ \\\\indexspace\n"} & 组间垂直间距\\
   \kw{headings_flag} &  \数字 & \V{0} & 控制显示分组名标题的旗标\\
   \kw{heading_prefix} &  \字符串 & \V{""} & 分组名标题的前缀\\
   \kw{heading_suffix} &  \字符串 & \V{""} & 分组名标题的后缀\\
@@ -262,13 +264,13 @@ TEXMF 树中由 \pkg{kpathsea} 库查找。一个格式文件由一组 \meta{关
   \kw{symhead_negative} &  \字符串 & \V{"symbols"} & 当旗标 \V{headings_flag} 为负数时，符号的标题\\
   \kw{numhead_positive} &  \字符串 & \V{"Numbers"} & 当旗标 \V{headings_flag} 为正数时，数字的标题\\
   \kw{numhead_negative} &  \字符串 & \V{"numbers"} & 当旗标 \V{headings_flag} 为负数时，数字的标题\\
-  \kw{item_0} &  \字符串 & \V{"\n\ \ \\item "} & 第 0 级条目间分隔\\
-  \kw{item_1} &  \字符串 & \V{"\n\ \ \ \ \\subitem "} & 第 1 级条目间分隔\\
-  \kw{item_2} &  \字符串 & \V{"\n\ \ \ \ \ \ \\subsubitem "} & 第 2 级条目间分隔\\
-  \kw{item_01} &  \字符串 & \V{"\n\ \ \ \ \\subitem "} & 第 0/1 级条目间分隔\\
-  \kw{item_x1} &  \字符串 & \V{"\n\ \ \ \ \\subitem "} & 第 0/1 级条目间分隔，其中第 0 级无页码\\
-  \kw{item_12} &  \字符串 & \V{"\n\ \ \ \ \ \ \\subsubitem "} & 第 1/2 级条目间分隔\\
-  \kw{item_x2} &  \字符串 & \V{"\n\ \ \ \ \ \ \\subsubitem "} & 第 1/2 级条目间分隔，其中第 1 级无页码\\
+  \kw{item_0} &  \字符串 & \V{"\n\ \ \\\\item "} & 第 0 级条目间分隔\\
+  \kw{item_1} &  \字符串 & \V{"\n\ \ \ \ \\\\subitem "} & 第 1 级条目间分隔\\
+  \kw{item_2} &  \字符串 & \V{"\n\ \ \ \ \ \ \\\\subsubitem "} & 第 2 级条目间分隔\\
+  \kw{item_01} &  \字符串 & \V{"\n\ \ \ \ \\\\subitem "} & 第 0/1 级条目间分隔\\
+  \kw{item_x1} &  \字符串 & \V{"\n\ \ \ \ \\\\subitem "} & 第 0/1 级条目间分隔，其中第 0 级无页码\\
+  \kw{item_12} &  \字符串 & \V{"\n\ \ \ \ \ \ \\\\subsubitem "} & 第 1/2 级条目间分隔\\
+  \kw{item_x2} &  \字符串 & \V{"\n\ \ \ \ \ \ \\\\subsubitem "} & 第 1/2 级条目间分隔，其中第 1 级无页码\\
   \kw{delim_0} &  \字符串 & \V{", "} & 第 0 级条目与页码分隔\\
   \kw{delim_1} &  \字符串 & \V{", "} & 第 1 级条目与页码分隔\\
   \kw{delim_2} &  \字符串 & \V{", "} & 第 2 级条目与页码分隔\\
@@ -276,7 +278,7 @@ TEXMF 树中由 \pkg{kpathsea} 库查找。一个格式文件由一组 \meta{关
   \kw{delim_r} &  \字符串 & \V{"--"} & 页码范围符号\\
   \kw{delim_t} &  \字符串 & \V{""} & 将插入到在页码列表末尾。如果页码列表为空，此项无
   效果。 \\
-  \kw{encap_prefix} &  \字符串 & \V{"\\"} & 页码特殊指令前缀\\
+  \kw{encap_prefix} &  \字符串 & \V{"\\\\"} & 页码特殊指令前缀\\
   \kw{encap_infix} &  \字符串 & \V{"\{"} & 页码特殊指令中缀\\
   \kw{encap_suffix} &  \字符串 & \V{"\}"} & 页码特殊指令后缀\\
   \kw{page_precedence} &  \字符串 & \V{"rnaRA"} & 不同类型页码的次序，默认值表示小写
@@ -304,7 +306,7 @@ TEXMF 树中由 \pkg{kpathsea} 库查找。一个格式文件由一组 \meta{关
   \kw{radical_suffix}            & \字符串 & \V{"部"} & 部首后缀 \\
   \kw{radical_simplified_flag}   & \数字 & 1 & 是否输出简化部首的标志 \\
   \kw{radical_simplified_prefix} & \字符串 & \V{"（"} & 简化部首前缀 \\
-  \kw{radical_simplified_delimiter} & \字符串 & \V{"、"} & 多个简化部首间的分隔符 \\
+  \kw{radical_simplified_separator} & \字符串 & \V{"、"} & 多个简化部首间的分隔符 \\
   \kw{radical_simplified_suffix} & \字符串 & \V{"）"} & 简化部首后缀 \\
 \end{xltabular}
 
@@ -320,7 +322,7 @@ TEXMF 树中由 \pkg{kpathsea} 库查找。一个格式文件由一组 \meta{关
 \endhead
 \bottomrule
 \endfoot
-  \kw{setpage_prefix} &  \字符串 & \V{"\n\ \ \\setcounter\{page\}\{"} & 页码设置前缀\\
+  \kw{setpage_prefix} &  \字符串 & \V{"\n\ \ \\\\setcounter\{page\}\{"} & 页码设置前缀\\
   \kw{setpage_suffix} &  \字符串 & \V{"\}\n"} & 页码设置后缀\\
   \kw{line_max} &  \数字 & \V{72} & 最大行长度，超出长度会自动折行\\
   \kw{indent_space} &  \字符串 & \V{"\t\t"} & 自动折行的缩进\\
@@ -690,9 +692,9 @@ end
 \end{luadoc*}
 
 \begin{luarun}{}
-local s = "ABC汉字。";
+local s = "😂👩🏻‍❤️‍💋‍👨🏻AB汉字。";
 for cluster in StrRef.unsafe_new(s):graphemes() do
-    print(cluster);
+    print(cluster, #cluster);
 end
 \end{luarun}
 
@@ -709,14 +711,14 @@ end
 \end{luadoc*}
 
 \begin{luarun}{}
-local s = [[ABC: (“汉字”)。]];
+local s = [[ABC: (“汉👩🏻‍❤️‍💋‍👨🏻字”)。]];
 for word in StrRef.unsafe_new(s):unicode_words() do
     print(word);
 end
 \end{luarun}
 
 \begin{luarun}{}
-local s = [[ABC: (“汉字”)。]];
+local s = [[ABC: (“汉👩🏻‍❤️‍💋‍👨🏻字”)。]];
 for part in StrRef.unsafe_new(s):split_word_bounds() do
     print(part);
 end
@@ -1225,7 +1227,7 @@ print(Emoji('👩🏻‍❤️‍💋‍👨🏻'), icu_data[ Emoji('👩🏻‍
 \end{luadoc*}
 
 \begin{luadoc*}{}
-# preamble, postamble, group_skip, heading_prefix, heading_suffix, headings_flag, numhead_positive, numhead_negative, symhead_positive, symhead_negative, item_0, item_1, item_2, item_01, item_x1, item_12, item_x2, delim_0, delim_1, delim_2, delim_n, delim_r, delim_t, encap_prefix, encap_infix, encap_suffix, page_precedence, suffix_2p, suffix_3p, suffix_mp, stroke_prefix, stroke_suffix, radical_prefix, radical_suffix, radical_simplified_flag, radical_simplified_prefix, radical_simplified_delimiter, radical_simplified_suffix
+# preamble, postamble, group_skip, heading_prefix, heading_suffix, headings_flag, numhead_positive, numhead_negative, symhead_positive, symhead_negative, item_0, item_1, item_2, item_01, item_x1, item_12, item_x2, delim_0, delim_1, delim_2, delim_n, delim_r, delim_t, encap_prefix, encap_infix, encap_suffix, page_precedence, suffix_2p, suffix_3p, suffix_mp, stroke_prefix, stroke_suffix, radical_prefix, radical_suffix, radical_simplified_flag, radical_simplified_prefix, radical_simplified_separator, radical_simplified_suffix
 ! IstOutputStyle.preamble() -> StrRef | nil;
 返回输出格式对应关键字的值。
 \end{luadoc*}
@@ -1578,8 +1580,25 @@ print(digest.blake2b256("Hello, world!"));
 \subsection{\textcon{LPeg}}
 
 \href{https://www.inf.puc-rio.br/~roberto/lpeg/lpeg.html}{\textcon{LPeg}} 是基于 Parsing Expression Grammars 的模式匹配库。
-cindex 内置了此库，可使用 \textcon{require("lpeg")} 加载。详细用法见 \url{https://www.inf.puc-rio.br/~roberto/lpeg/lpeg.html}。
+cindex 内置了此库的 \texttt{1.1.0} 版，可使用 \textcon{require("lpeg")} 加载。详细用法见 \url{https://www.inf.puc-rio.br/~roberto/lpeg/lpeg.html}。
 
+\subsection{\textcon{argparse}}
+
+\href{https://github.com/luarocks/argparse/blob/master}{\textcon{argparse}} 是解析命令行的 \LUA 库。
+cindex 内置了此库的 \texttt{0.7.2} 版，可使用 \textcon{require("argparse")} 加载。详细用法见 \url{http://argparse.readthedocs.org/}。
+
+cindex 支持在 \LUA 格式中解析命令行中传入的额外的参数，可使用此库解析。
+
+\begin{luarun}{}
+local extra_options = { "-o", "cindexout.tex", "cindexin.tex" };
+local argparse = require("argparse");
+local parser = argparse("mystyle");
+parser:argument("input", "Input file.");
+parser:option("-o --output", "Output file.", "a.out");
+parser:option("-I --include", "Include locations."):count("*");
+local args = parser:parse(extra_options);
+print(CIndex.Util.table_to_json_string(args));
+\end{luarun}
 
 \setuplayout{preset=balance}
 \printindex[docusage,multi={ragged,sep=1em,outer-skip=0pt,cols=2}]

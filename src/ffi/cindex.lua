@@ -96,7 +96,7 @@ typedef struct {
         bool (*radical_suffix)(void*, StrRef*);
         int32_t (*radical_simplified_flag)(void*);
         bool (*radical_simplified_prefix)(void*, StrRef*);
-        bool (*radical_simplified_delimiter)(void*, StrRef*);
+        bool (*radical_simplified_separator)(void*, StrRef*);
         bool (*radical_simplified_suffix)(void*, StrRef*);
     } ist_output_fn;
     struct {
@@ -370,8 +370,8 @@ end,
     radical_simplified_prefix = function() local res = ffi.new(StrRef);
         if __api.ist_output_fn.radical_simplified_prefix(__api.ist_output, res) then return res else return nil end
     end,
-    radical_simplified_delimiter = function() local res = ffi.new(StrRef);
-        if __api.ist_output_fn.radical_simplified_delimiter(__api.ist_output, res) then return res else return nil end
+    radical_simplified_separator = function() local res = ffi.new(StrRef);
+        if __api.ist_output_fn.radical_simplified_separator(__api.ist_output, res) then return res else return nil end
     end,
     radical_simplified_suffix = function() local res = ffi.new(StrRef);
         if __api.ist_output_fn.radical_simplified_suffix(__api.ist_output, res) then return res else return nil end
@@ -2450,9 +2450,9 @@ if has_custom and type(user_script) == "table" then
             local real_cmp = cmp_func;
             if user_script["entry_compare_" .. g] then
                 real_cmp = user_script["entry_compare_" .. g];
-            elseif starts_with(g, "BiHua") and user_script["entry_compare_BiHua"] then
+            elseif starts_with(g, "BiHua") and tonumber(g:sub(6)) and user_script["entry_compare_BiHua"] then
                 real_cmp = user_script["entry_compare_BiHua"];
-            elseif starts_with(g, "BuShou") and user_script["entry_compare_BuShou"] then
+            elseif starts_with(g, "BuShou") and tonumber(g:sub(7)) and user_script["entry_compare_BuShou"] then
                 real_cmp = user_script["entry_compare_BuShou"];
             end
             table.sort(v, function (l, r)
@@ -2723,8 +2723,18 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
     local radical_suffix = output_style:radical_suffix();
     local radical_simplified_flag = tonumber(output_style:radical_simplified_flag());
     local radical_simplified_prefix = output_style:radical_simplified_prefix();
-    local radical_simplified_delimiter = output_style:radical_simplified_delimiter();
+    local radical_simplified_separator = output_style:radical_simplified_separator();
     local radical_simplified_suffix = output_style:radical_simplified_suffix();
+
+    -- undocument keyword
+    output_style.item_3 = output_style.item_3 or function() return tostring(item_2) .. "\\quad " end;
+    output_style.item_4 = output_style.item_4 or function() return tostring(item_2) .. "\\qquad " end;
+    output_style.item_23 = output_style.item_23 or function() return tostring(item_12) .. "\\quad " end;
+    output_style.item_x3 = output_style.item_x3 or function() return tostring(item_12) .. "\\quad " end;
+    output_style.item_34 = output_style.item_34 or function() return tostring(item_12) .. "\\qquad " end;
+    output_style.item_x4 = output_style.item_x4 or function() return tostring(item_12) .. "\\qquad " end;
+    output_style.delim_3 = output_style.delim_3 or function() return delim_2 end;
+    output_style.delim_4 = output_style.delim_4 or function() return delim_2 end;
 
     local index = 0;
 
@@ -2765,14 +2775,10 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
         local pages_len = entry:pages_count();
         if pages_len == 0 then return false end
 
-        if i == 0 then
-            check_write(delim_0);
-        elseif i == 1 then
-            check_write(delim_1);
-        elseif i == 2 then
-            check_write(delim_2);
+        if i < 5 then
+            check_write(output_style["delim_" .. i]());
         else
-            -- Logger.warn("length of levels is more than 3");
+            -- Logger.warn("length of levels is more than 5");
         end
 
         for idx = 0, pages_len - 1 do
@@ -2788,6 +2794,31 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
 
         check_write(delim_t);
         return true;
+    end;
+
+    local write_item = function (len, prev_len, prev_has_page, entry)
+        local i = len - 1;
+        if i == 0 then
+            check_write(output_style["item_" .. i]());
+        elseif prev_len >= len then
+            check_write(output_style["item_" .. i]());
+        elseif prev_has_page then
+            check_write(output_style["item_" .. i - 1 .. i]());
+        else
+            check_write(output_style["item_x" .. i]());
+        end
+        check_write(entry:level_n(i));
+    end;
+
+    local function fake_items(len, missing, prev_has_page, entry)
+        if missing <= 0 then return len, prev_has_page end
+        if len > 5 then
+            Logger.warn("length of levels is more than 5: " .. len .. ", last level: " .. tostring(entry:level_n(len - 1)));
+        end
+        local curr = len - missing;
+        write_item(curr, curr - 1, false, entry);
+        fake_items(len, missing - 1, false, entry);
+        return curr, false;
     end;
 
     local write_group = function (entries)
@@ -2813,50 +2844,12 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
 
             if levels_len == 0 then
                 Logger.warn("empty level in group");
-            elseif levels_len == 1 then
-                check_write(item_0);
-                check_write(entry:level_n(0));
-                prev_has_page = write_pages(0, entry);
-            elseif levels_len == 2 then
-                if missing == 1 then
-                    check_write(item_0);
-                    check_write(entry:level_n(0));
-                    prev_levels_len = 1;
-                    prev_has_page = false;
-                end
-                if prev_levels_len == levels_len then
-                    check_write(item_1);
-                else
-                    check_write(prev_has_page and item_01 or item_x1);
-                end
-                check_write(entry:level_n(1));
-                prev_has_page = write_pages(1, entry);
-            elseif levels_len == 3 then
-                if missing == 2 then
-                    check_write(item_0);
-                    check_write(entry:level_n(0));
-                    prev_levels_len = 1;
-                    prev_has_page = false;
-                end
-                if missing > 0 then
-                    if prev_levels_len == 2 then
-                        check_write(item_1);
-                    else
-                        check_write(prev_has_page and item_01 or item_x1);
-                    end
-                    check_write(entry:level_n(1));
-                    prev_levels_len = 2;
-                    prev_has_page = false;
-                end
-                if prev_levels_len == levels_len then
-                    check_write(item_2);
-                else
-                    check_write(prev_has_page and item_12 or item_x2);
-                end
-                check_write(entry:level_n(2));
-                prev_has_page = write_pages(2, entry);
+            elseif levels_len <= 5 then
+                prev_levels_len, prev_has_page = fake_items(levels_len, missing, prev_has_page, entry);
+                write_item(levels_len, prev_levels_len, prev_has_page, entry);
+                prev_has_page = write_pages(levels_len - 1, entry);
             else
-                Logger.warn("length of levels is more than 3: " .. levels_len .. ", last level: " .. tostring(entry:level_n(levels_len - 1)));
+                Logger.warn("length of levels is more than 5: " .. levels_len .. ", last level: " .. tostring(entry:level_n(levels_len - 1)));
             end
 
             prev_levels_len = levels_len;
@@ -2897,7 +2890,7 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
                     check_write(radical_simplified_prefix);
                     for s_i = 1, simp_len do
                         if s_i ~= 1 then
-                            check_write(radical_simplified_delimiter);
+                            check_write(radical_simplified_separator);
                         end
                         check_write(Char(curr_chars[1 + s_i]));
                     end

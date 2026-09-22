@@ -484,7 +484,7 @@ pub struct IstOutputStyle {
     /// 简化部首前缀. Default: `"（"`.
     pub radical_simplified_prefix: String,
     /// 简化部首的分隔符. Default: `"、"`.
-    pub radical_simplified_delimiter: String,
+    pub radical_simplified_separator: String,
     /// 简化部首后缀. Default: `"）"`.
     pub radical_simplified_suffix: String,
 }
@@ -595,7 +595,7 @@ pub struct IstFile {
     /// 简化部首前缀. Default: `"（"`.
     pub radical_simplified_prefix: String,
     /// 简化部首的分隔符. Default: `"、"`.
-    pub radical_simplified_delimiter: String,
+    pub radical_simplified_separator: String,
     /// 简化部首后缀. Default: `"）"`.
     pub radical_simplified_suffix: String,
     /// 下面是在 cindex 不产生功能的选项。
@@ -658,7 +658,7 @@ impl Default for IstFile {
             radical_suffix: "部".into(),
             radical_simplified_flag: 1,
             radical_simplified_prefix: "（".into(),
-            radical_simplified_delimiter: "、".into(),
+            radical_simplified_separator: "、".into(),
             radical_simplified_suffix: "）".into(),
             setpage_prefix: Default::default(),
             setpage_suffix: Default::default(),
@@ -741,7 +741,7 @@ impl IstFile {
                 radical_suffix: self.radical_suffix,
                 radical_simplified_flag: self.radical_simplified_flag,
                 radical_simplified_prefix: self.radical_simplified_prefix,
-                radical_simplified_delimiter: self.radical_simplified_delimiter,
+                radical_simplified_separator: self.radical_simplified_separator,
                 radical_simplified_suffix: self.radical_simplified_suffix,
             },
         )
@@ -819,8 +819,8 @@ fn parse_ist_string(ist: &mut IstFile, ist_content: &str) -> Result<()> {
             "radical_simplified_prefix" => {
                 ist.radical_simplified_prefix = scan_string(input)?.to_string()
             }
-            "radical_simplified_delimiter" => {
-                ist.radical_simplified_delimiter = scan_string(input)?.to_string()
+            "radical_simplified_separator" => {
+                ist.radical_simplified_separator = scan_string(input)?.to_string()
             }
             "radical_simplified_suffix" => {
                 ist.radical_simplified_suffix = scan_string(input)?.to_string()

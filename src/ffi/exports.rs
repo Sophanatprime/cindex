@@ -319,7 +319,7 @@ mod ist {
         pub radical_simplified_flag: unsafe extern "C" fn(*const IstOutputStyle) -> i32,
         pub radical_simplified_prefix:
             unsafe extern "C" fn(*const IstOutputStyle, *mut StrRef) -> bool,
-        pub radical_simplified_delimiter:
+        pub radical_simplified_separator:
             unsafe extern "C" fn(*const IstOutputStyle, *mut StrRef) -> bool,
         pub radical_simplified_suffix:
             unsafe extern "C" fn(*const IstOutputStyle, *mut StrRef) -> bool,
@@ -364,7 +364,7 @@ mod ist {
                 radical_suffix,
                 radical_simplified_flag,
                 radical_simplified_prefix,
-                radical_simplified_delimiter,
+                radical_simplified_separator,
                 radical_simplified_suffix,
             }
         }
@@ -451,7 +451,7 @@ mod ist {
     gen_ist_fn!(IstOutputStyle [radical_suffix: String]);
     gen_ist_fn!(IstOutputStyle [radical_simplified_flag: i32]);
     gen_ist_fn!(IstOutputStyle [radical_simplified_prefix: String]);
-    gen_ist_fn!(IstOutputStyle [radical_simplified_delimiter: String]);
+    gen_ist_fn!(IstOutputStyle [radical_simplified_separator: String]);
     gen_ist_fn!(IstOutputStyle [radical_simplified_suffix: String]);
 }
 

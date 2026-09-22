@@ -20,14 +20,19 @@ fn main() {
         .include("lpeg-1.1.0")
         .compile("lpeg");
 
-    build_jit_modules(
+    build_lua_modules(
         std::env::var_os("OUT_DIR")
             .expect("unable to get OUT_DIR")
             .as_ref(),
+        ["argparse"],
     );
 }
 
-fn build_jit_modules(out_dir: &Path) {
+fn build_lua_modules<P>(out_dir: &Path, other_paths: P)
+where
+    P: IntoIterator,
+    P::Item: AsRef<Path>,
+{
     let src_dir = out_dir.join("luajit-build").join("src");
 
     let jit_dir = src_dir.join("jit");
@@ -43,16 +48,18 @@ fn build_jit_modules(out_dir: &Path) {
 
     assert!(
         luajit.is_file(),
-        "LuaJIT executable not found: {}",
+        "LuaJIT executable is not found: {}",
         luajit.display()
     );
 
-    let generated_dir = out_dir.join("jit-generated");
+    let generated_dir = out_dir.join("modules-generated");
     fs::create_dir_all(&generated_dir).unwrap();
 
     let mut modules = Vec::new();
 
-    generate(&jit_dir, &jit_dir, &generated_dir, &luajit, &mut modules);
+    // generate(&jit_dir, &jit_dir, &generated_dir, &luajit, &mut modules, other_paths);
+    generate2(&generated_dir, &luajit, Some(&jit_dir), &mut modules);
+    generate2(&generated_dir, &luajit, other_paths, &mut modules);
 
     let mut rust = String::new();
 
@@ -66,7 +73,7 @@ fn build_jit_modules(out_dir: &Path) {
         let _ = module;
     }
 
-    fs::write(out_dir.join("jit_ffi.rs"), rust).unwrap();
+    fs::write(out_dir.join("lua_modules.rs"), rust).unwrap();
 
     let mut cc = cc::Build::new();
 
@@ -76,96 +83,102 @@ fn build_jit_modules(out_dir: &Path) {
         cc.file(c_file);
     }
 
-    cc.compile("luajit_jit_bytecode");
+    cc.compile("luajit_modules_bytecode");
 }
 
-fn generate(
-    dir: &Path,
-    root: &Path,
-    out: &Path,
+fn generate2<P>(out: &Path, luajit: &Path, paths: P, modules: &mut Vec<(String, String, PathBuf)>)
+where
+    P: IntoIterator,
+    P::Item: AsRef<Path>,
+{
+    for path in paths.into_iter() {
+        let path = path.as_ref();
+        let path = if path.is_relative() {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(path)
+        } else {
+            path.to_path_buf()
+        };
+        if path.is_dir() {
+            let parent_name = path.file_name().unwrap().to_string_lossy();
+            let parent_name = parent_name
+                .find('-')
+                .map_or(parent_name.to_string(), |idx| {
+                    parent_name[..idx].to_string()
+                });
+            for entry in fs::read_dir(path).unwrap() {
+                let entry = entry.unwrap().path();
+                generate_module(luajit, out, &parent_name, &entry, modules);
+            }
+        } else if path.is_file() {
+            let parent_name = path.file_stem().unwrap().to_string_lossy();
+            generate_module(luajit, out, &parent_name, &path, modules);
+        } else {
+            panic!("invalid module path: {}", path.display());
+        }
+    }
+}
+
+fn generate_module(
     luajit: &Path,
+    out: &Path,
+    root: &str,
+    path: &Path,
     modules: &mut Vec<(String, String, PathBuf)>,
 ) {
-    let mut entries: Vec<_> = fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
-
-    entries.sort();
-
-    for path in entries {
-        if path.is_dir() {
-            generate(&path, root, out, luajit, modules);
-            continue;
-        }
-
-        if path.extension().and_then(|x| x.to_str()) != Some("lua") {
-            continue;
-        }
-
-        let rel = path.strip_prefix(root).unwrap();
-
-        let tail = rel
-            .with_extension("")
-            .to_string_lossy()
-            .replace(|c| c == '\\' || c == '/', ".");
-
-        let module = format!("jit.{tail}");
-
-        /*
-         * jit.lua       -> luaopen_jit
-         * jit.dump.lua  -> luaopen_jit_dump
-         * ...
-         */
-        let symbol_tail = module.strip_prefix("jit.").unwrap_or("");
-
-        let symbol = if symbol_tail.is_empty() {
-            "luaopen_jit".to_string()
-        } else {
-            format!("luaopen_jit_{}", symbol_tail.replace('.', "_"))
-        };
-
-        let out_c_file = out.join(format!("{}.c", symbol));
-
-        let status = Command::new(luajit)
-            .current_dir(luajit.parent().unwrap())
-            .arg("-b")
-            .arg("-n")
-            .arg(&module)
-            .arg(&path)
-            .arg(&out_c_file)
-            .status()
-            .expect("Failed to execute luajit");
-
-        assert!(
-            status.success(),
-            "LuaJIT failed to compile bytecode for: {}",
-            path.display()
-        );
-
-        let symbol_bc = format!("luaJIT_BC_{}", module.replace('.', "_"));
-        let c_wrapper = format!(
-            "\n\
-            #include \"lua.h\"\n\
-            #include \"lauxlib.h\"\n\
-            \n\
-            int {symbol}(lua_State *L) {{\n\
-            \tif (luaL_loadbuffer(L, (const char *){symbol_bc}, sizeof({symbol_bc}), \"={module}\") == 0) {{\n\
-            \t\tlua_call(L, 0, 1);\n\
-            \t\treturn 1;\n\
-            \t}}\n\
-            \treturn lua_error(L);\n\
-            }}\n"
-        );
-
-        use std::io::Write;
-        let mut c_file = std::fs::OpenOptions::new()
-            .append(true)
-            .open(&out_c_file)
-            .unwrap();
-
-        c_file.write_all(c_wrapper.as_bytes()).unwrap();
-
-        modules.push((module, symbol, out_c_file));
+    if !path.exists() || path.is_dir() {
+        panic!("invalid module file: {}", path.display());
     }
+    if path.extension().and_then(|x| x.to_str()) != Some("lua") {
+        return;
+    }
+
+    let rel = path.file_stem().unwrap().to_string_lossy();
+    let module = if rel == root {
+        rel.to_string()
+    } else {
+        format!("{}.{}", root, rel)
+    };
+    let symbol = format!("luaopen_{}", module.replace('.', "_"));
+
+    let out_c_file = out.join(format!("{}.c", &symbol));
+    let status = Command::new(luajit)
+        .current_dir(luajit.parent().unwrap())
+        .arg("-b")
+        .arg("-n")
+        .arg(&module)
+        .arg(&path)
+        .arg(&out_c_file)
+        .status()
+        .expect("Failed to execute luajit");
+
+    assert!(
+        status.success(),
+        "LuaJIT failed to compile bytecode for: {}",
+        path.display()
+    );
+
+    let symbol_bc = format!("luaJIT_BC_{}", module.replace('.', "_"));
+    let c_wrapper = format!(
+        "\n\
+        #include \"lua.h\"\n\
+        #include \"lauxlib.h\"\n\
+        \n\
+        int {symbol}(lua_State *L) {{\n\
+        \tif (luaL_loadbuffer(L, (const char *){symbol_bc}, sizeof({symbol_bc}), \"={module}\") == 0) {{\n\
+        \t\tlua_call(L, 0, 1);\n\
+        \t\treturn 1;\n\
+        \t}}\n\
+        \treturn lua_error(L);\n\
+        }}\n"
+    );
+
+    use std::io::Write;
+    let mut c_file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&out_c_file)
+        .unwrap();
+
+    c_file.write_all(c_wrapper.as_bytes()).unwrap();
+
+    modules.push((module, symbol, out_c_file));
 }

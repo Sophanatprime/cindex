@@ -17,6 +17,7 @@ pub fn make_lua<S: AsRef<str>>(
     LuaModule::IcuTable.preload(&lua)?;
     LuaModule::Jits.preload(&lua)?;
     LuaModule::Lpeg.preload(&lua)?;
+    LuaModule::Argparse.preload(&lua)?;
     f(&lua)?;
     let func = lua.load(include_str!("cindex.lua")).into_function()?;
     match user_script {
@@ -33,6 +34,7 @@ pub enum LuaModule {
     IcuTable,
     Jits,
     Lpeg,
+    Argparse,
 }
 
 impl LuaModule {
@@ -57,6 +59,12 @@ impl LuaModule {
                     "lpeg",
                     lua.create_c_function(std::mem::transmute(
                         luajit_modules::luaopen_lpeg as *const (),
+                    ))?,
+                )?,
+                LuaModule::Argparse => lua.preload_module(
+                    "argparse",
+                    lua.create_c_function(std::mem::transmute(
+                        luajit_modules::luaopen_argparse as *const (),
                     ))?,
                 )?,
             }

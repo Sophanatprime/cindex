@@ -263,6 +263,8 @@ cindex\tGNU Lesser General Public License v2.1 or later
 \thttps://github.com/Sophanatprime/cindex/LICENSE
 lpeg-1.1.0\tMIT LICENSE
 \thttps://www.inf.puc-rio.br/~roberto/lpeg/#license
+argparse-0.7.2\tMIT LICENSE
+\thttps://github.com/luarocks/argparse/blob/master/LICENSE
 Unicode Data\tUnicode License v3
 \thttps://www.unicode.org/license.txt
 Unihan Data\tUnicode License v3
@@ -712,7 +714,8 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
         entries.len(),
     );
 
-    if !entries.is_empty() {
+    let has_entry = !entries.is_empty();
+    if has_entry {
         let detect_groups: LuaFunction = lua.globals().raw_get("__cindex_detect_groups")?;
 
         // lua.load(r##"
@@ -779,13 +782,23 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
             Ok(true) => {}
             _ => bail!("writing to {} is forbidden", output.unwrap().display()),
         }
-        let mut write_buf = cindex::ffi::Writer(match output {
+        let mut write_buf = cindex::ffi::Writer(match &output {
             Some(p) => Box::new(std::io::BufWriter::new(std::fs::File::create(p).unwrap())),
             None => Box::new(std::io::stdout()),
         });
         lua.globals()
             .raw_get::<LuaFunction>("__cindex_write_entries")?
             .call::<()>((&mut write_buf as *mut _ as i64, groups_table, map))?;
+    }
+
+    let writing_info = if has_entry {
+        "done"
+    } else {
+        "nothing to write"
+    };
+    match &output {
+        Some(output) => log::info!("Writing to: '{}', {}", output.display(), writing_info),
+        None => log::info!("Writing to stdout, {}", writing_info),
     }
 
     Ok(())

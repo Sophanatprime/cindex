@@ -238,7 +238,6 @@ dependencies = [
  "modular-bitfield",
  "pcre2-sys",
  "phf 0.14.0",
- "regex",
  "rustc-hash",
  "serde",
  "serde_json",

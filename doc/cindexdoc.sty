@@ -40,6 +40,7 @@
     \let\do\@makeother\dospecials
     \@makeother\( \@makeother\) \@makeother\| \@makeother\< \@makeother\>
     \catcode`\^^M\active \catcode`\^^I=12 \catcode`\ =13~
+    \__cndd_scan_init:
     \def\verbatim@processline { \exp_args:NV \__cndd_scan_toks:n \verbatim@line }
     \__cndd_verbatim_font_hook:
     \verbatim@start
@@ -107,6 +108,11 @@
 \tl_map_inline:nn { \  }
   { \tl_const:ce { __cndd_char_ignore_ \number`#1 _tl } { ~ } }
 
+\bool_new:N \l__cndd_in_string_bool
+\cs_new_protected:Npn \__cndd_scan_init:
+  {
+    \bool_set_false:N \l__cndd_in_string_bool
+  }
 \tl_new:N \l__cndd_ident_tl
 \tl_new:N \l__cndd_op_tl
 \int_new:N \l__cndd_cc_int
@@ -203,6 +209,7 @@
                 \__cndd_print_ident:
                 \cs_if_exist:cT { __cndd_char_brace_ \__cndd_cc: _tl }
                   { \__cndd_print_op: }
+                \prop_get:NnNT \l__cndd_special_symbol_prop {#1} \__cndd_special_op_do:w { \__cndd_special_op_do:w }
                 \tl_put_right:Nn \l__cndd_op_tl { #1 }
                 \__cndd_check_special_op:
               }
@@ -218,6 +225,9 @@
           }
       }
   }
+\prop_new_linked:N \l__cndd_special_symbol_prop
+\prop_put:Nnn \l__cndd_special_symbol_prop { " }
+  { \bool_set_inverse:N \l__cndd_in_string_bool }
 \prop_new_linked:N \l__cndd_special_op_prop
 \prop_put:Nnn \l__cndd_special_op_prop { -- } { \__cndd_scan_comment:n }
 \prop_put:Nnn \l__cndd_special_op_prop { [[ } { \__cndd_scan_raw_string:nn { 0 } }
@@ -231,7 +241,10 @@
       { \l__cndd_special_op_do_tl {#1} } {#1}
   }
 \cs_new_protected:Npn \__cndd_scan_comment:n #1 #2 \q_recursion_tail \q_recursion_stop
-  { { \color[gray]{0.5} \__cndd_print_op: #2 } \tl_clear:N \l__cndd_op_tl }
+  {
+    \bool_if:NTF \l__cndd_in_string_bool { #1 #2 \q_recursion_tail \q_recursion_stop }
+      { { \color[gray]{0.5} \__cndd_print_op: #2 } \tl_clear:N \l__cndd_op_tl }
+  }
 \tl_new:N \l__cndd_scan_str_tl
 \cs_new_protected:Npn \__cndd_scan_raw_string:nn #1 #2 #3 \q_recursion_tail
   {
@@ -295,6 +308,7 @@
     \let\do\@makeother\dospecials
     \@makeother\( \@makeother\) \@makeother\| \@makeother\< \@makeother\>
     \catcode`\^^M\active \catcode`\^^I=10 \catcode`\ =13~
+    \__cndd_scan_init:
     \def\verbatim@processline { \exp_args:NV \__cndd_scan_toks:n \verbatim@line }
     \verbatim@start
   }
@@ -389,6 +403,7 @@
     \seq_if_empty:NF \g__cndd_syntax_seq
       {
         \__cus_doc_syntax:w
+        \__cndd_scan_init:
         \seq_map_inline:Nn \g__cndd_syntax_seq
           { \__cndd_scan_toks:n {##1} \obeyedline }
         \@@par \__cus_doc_syntax_end:
@@ -464,6 +479,7 @@
     \__cndd_side_by_side:nn
       {
         \__cndd_verbatim_font_hook:
+        \__cndd_scan_init:
         \seq_map_inline:Nn \g__cndd_luarun_seq
           { \par\leavevmode \__cndd_luarun_line:n {##1} }
       }

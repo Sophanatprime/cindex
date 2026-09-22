@@ -1,7 +1,7 @@
 #![no_std]
 use core::ffi::{c_int, c_void};
 
-include!(concat!(env!("OUT_DIR"), "/jit_ffi.rs"));
+include!(concat!(env!("OUT_DIR"), "/lua_modules.rs"));
 
 pub static JIT_MODULES: &[(
     &'static str,
