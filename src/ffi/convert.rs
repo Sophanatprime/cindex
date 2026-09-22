@@ -43,7 +43,7 @@ impl FromLua for IndexEntry {
 
         let mut levels = SmallVec::new();
         if let LuaValue::Table(levels_tbl) = levels_val {
-            let len = levels_tbl.raw_len() as usize;
+            let len = levels_tbl.raw_len();
             if len > 0 {
                 levels.reserve(len);
                 for i in 1..=len {
@@ -64,7 +64,7 @@ impl FromLua for IndexEntry {
                 }
             }
         } else {
-            return err_fn(format!("expect table for levels"));
+            return err_fn("expect table for levels".to_string());
         }
 
         let range = if range_val == LuaNil {
@@ -90,7 +90,7 @@ impl FromLua for IndexEntry {
         } else if let LuaValue::String(s) = page_commands {
             Some(s.to_string_lossy().to_compact_string())
         } else {
-            return err_fn(format!("expect string for page_commands"));
+            return err_fn("expect string for page_commands".to_string());
         };
 
         let mut pages = SmallVec::new();
@@ -108,35 +108,36 @@ impl FromLua for IndexEntry {
                             match s.to_str()?.as_ref() {
                                 "kind" => {
                                     if kind.is_some() {
-                                        return err_fn(format!(
-                                            "duplicated field 'kind' of a page"
-                                        ));
+                                        return err_fn(
+                                            "duplicated field 'kind' of a page".to_string(),
+                                        );
                                     }
                                     if let LuaValue::String(kind_val) = v {
                                         kind = Some(kind_val);
                                     } else {
-                                        return err_fn(format!(
-                                            "expect string for field 'kind' of a page"
-                                        ));
+                                        return err_fn(
+                                            "expect string for field 'kind' of a page".to_string(),
+                                        );
                                     }
                                 }
                                 "value" => {
                                     if value.is_some() {
-                                        return err_fn(format!(
-                                            "duplicated field 'value' of a page"
-                                        ));
+                                        return err_fn(
+                                            "duplicated field 'value' of a page".to_string(),
+                                        );
                                     }
                                     if let LuaValue::Integer(value_val) = v {
                                         value = Some(value_val as u64);
                                     } else if let LuaValue::Number(value_val) = v {
                                         value = Some(value_val as u64);
                                     } else {
-                                        return err_fn(format!(
+                                        return err_fn(
                                             "expect integer for field 'value' of a page"
-                                        ));
+                                                .to_string(),
+                                        );
                                     }
                                 }
-                                _ => return err_fn(format!("unknown field for a page")),
+                                _ => return err_fn("unknown field for a page".to_string()),
                             }
                         }
                     }
@@ -153,13 +154,15 @@ impl FromLua for IndexEntry {
                             s => return err_fn(format!("unknown kind of a page: '{}', ", s)),
                         },
                         (None, Some(_)) => {
-                            return err_fn(format!("missing field 'kind' of a page"));
+                            return err_fn("missing field 'kind' of a page".to_string());
                         }
                         (Some(_), None) => {
-                            return err_fn(format!("missing field 'value' of a page"));
+                            return err_fn("missing field 'value' of a page".to_string());
                         }
                         (None, None) => {
-                            return err_fn(format!("missing fields 'kind' and 'value' of a page"));
+                            return err_fn(
+                                "missing fields 'kind' and 'value' of a page".to_string(),
+                            );
                         }
                     }
                 }
@@ -167,7 +170,7 @@ impl FromLua for IndexEntry {
         } else if pages_val == LuaNil {
             // nop
         } else {
-            return err_fn(format!("expect table for pages"));
+            return err_fn("expect table for pages".to_string());
         };
 
         let pages_raw = if let LuaValue::String(s) = pages_raw_val {
@@ -175,7 +178,7 @@ impl FromLua for IndexEntry {
         } else if LuaNil == pages_raw_val {
             String::new()
         } else {
-            return err_fn(format!("expect string for pages_raw"));
+            return err_fn("expect string for pages_raw".to_string());
         };
 
         Ok(IndexEntry {

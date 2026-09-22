@@ -79,7 +79,7 @@ fn write_radical(generated_han: &mut impl Write) {
             .trim_ascii();
         let ideo = u32::from_str_radix(ideo, 16)
             .ok()
-            .and_then(|ideo| char::from_u32(ideo))
+            .and_then(char::from_u32)
             .expect("illegal CJKRadicals data");
         kx_ideo.push((kx, ideo));
     }
@@ -193,7 +193,7 @@ fn write_radical(generated_han: &mut impl Write) {
         writeln!(
             generated_han,
             "Radical::{} => ({}, {}),",
-            &tmp_str, kind.0, kind.1,
+            tmp_str, kind.0, kind.1,
         )
         .expect("unable to write generated_han.rs");
     }
@@ -292,7 +292,7 @@ fn write_cjk_info(generated_han: &mut impl Write) {
             let mut rs = entry
                 .next()
                 .expect("invalid Unihan_IRGSources Data")
-                .split(|b| b == '.' || b == ' ');
+                .split(['.', ' ']);
             let kind = rs.next().expect("invalid Unihan_IRGSources Data");
             let kind = match kind.bytes().position(|b| b == b'\'') {
                 Some(i) => (
@@ -552,7 +552,7 @@ fn write_han_order(han_stroke_order: &mut impl Write) {
         }
         let index = data_of(&mut indices, slot);
         *vec_item_of(&mut stroke_indices, slot) = *index;
-        *index += (full_stroke.len() + 1) / 2;
+        *index += full_stroke.len().div_ceil(2);
     }
 
     for (si, i) in stroke_indices.iter_mut().zip(indices) {

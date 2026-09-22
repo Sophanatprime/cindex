@@ -48,7 +48,7 @@ impl LuaModule {
                 LuaModule::Jits => {
                     for (name, func) in luajit_modules::JIT_MODULES {
                         lua.preload_module(
-                            *name,
+                            name,
                             lua.create_c_function(std::mem::transmute(*func))?,
                         )?;
                     }
@@ -77,7 +77,7 @@ pub fn kpse_find_file(file: impl AsRef<OsStr>, all: bool) -> Result<Option<OsStr
         let mut bytes = res.stdout;
         bytes.truncate(bytes.trim_ascii_end().len());
         if bytes.is_empty() {
-            return Ok(None);
+            Ok(None)
         } else {
             let file = unsafe { OsString::from_encoded_bytes_unchecked(bytes) };
             Ok(Some(file))

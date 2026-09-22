@@ -41,8 +41,8 @@ impl StrRef {
     pub fn move_step(&mut self, len: usize) {
         let len = len.min(self.len);
         unsafe {
-            (*self).ptr = (*self).ptr.add(len);
-            (*self).len -= len;
+            self.ptr = self.ptr.add(len);
+            self.len -= len;
         }
     }
 
@@ -515,7 +515,7 @@ mod strref {
 
     pub unsafe extern "C" fn from_buf(ptr: *const u8, len: usize, out: *mut StrRef) -> bool {
         if ptr.is_null() || out.is_null() {
-            return false;
+            false
         } else {
             unsafe {
                 (*out).ptr = ptr;
@@ -543,7 +543,7 @@ mod strref {
     }
 
     pub unsafe extern "C" fn cmp_buf(lhs: *const StrRef, ptr: *const u8, len: usize) -> i64 {
-        return unsafe { cmp(lhs, &StrRef { ptr, len } as *const _) };
+        unsafe { cmp(lhs, &StrRef { ptr, len } as *const _) }
     }
 
     pub unsafe extern "C" fn cmp_ignore_case(
@@ -597,7 +597,7 @@ mod strref {
             }
 
             if start > end || start > s.len {
-                return false;
+                false
             } else {
                 let ptr = s.ptr.add(start);
                 if !((*ptr as i8) >= -0x40) {
@@ -619,7 +619,7 @@ mod strref {
                         return false;
                     }
                 }
-                return true;
+                true
             }
         }
     }
@@ -649,7 +649,7 @@ mod strref {
 
         for i in 1..len {
             let byte = unsafe { *s.add(i) };
-            if byte < 0x80 || byte > 0xBF {
+            if !(0x80..=0xBF).contains(&byte) {
                 return u32::MAX;
             }
             code = (code << 6) | (byte as u32 & 0x3F);
@@ -696,10 +696,10 @@ mod strref {
                 let rest = bs.as_bytes();
                 (*s).ptr = rest.as_ptr();
                 (*s).len = rest.len();
-                return true;
+                true
             } else {
                 *s = StrRef::null();
-                return false;
+                false
             }
         }
     }
@@ -718,11 +718,11 @@ mod strref {
                     (*out).with_str(spl);
                     let len = spl.len() + c.len_utf8();
                     (*s).move_step(len);
-                    return true;
+                    true
                 }
                 None => {
                     *s = StrRef::null();
-                    return false;
+                    false
                 }
             }
         }
@@ -748,11 +748,11 @@ mod strref {
                     (*out).with_str(spl);
                     let len = spl.len() + pat.len();
                     (*s).move_step(len);
-                    return true;
+                    true
                 }
                 None => {
                     *s = StrRef::null();
-                    return false;
+                    false
                 }
             }
         }
@@ -773,11 +773,11 @@ mod strref {
                             .map(|s| s.as_ptr().offset_from_unsigned(sp_removed.as_ptr()))
                             .unwrap_or(bs.len()),
                     );
-                    return true;
+                    true
                 }
                 None => {
                     *s = StrRef::null();
-                    return false;
+                    false
                 }
             }
         }
@@ -796,11 +796,11 @@ mod strref {
                 Some(ge) => {
                     (*out).with_str(ge);
                     (*s).with_str(ge_iter.as_str());
-                    return true;
+                    true
                 }
                 None => {
                     *s = StrRef::null();
-                    return false;
+                    false
                 }
             }
         }
@@ -819,11 +819,11 @@ mod strref {
                 Some(ge) => {
                     (*out).with_str(ge);
                     (*s).move_step((*out).ptr.add((*out).len).offset_from_unsigned((*s).ptr));
-                    return true;
+                    true
                 }
                 None => {
                     *s = StrRef::null();
-                    return false;
+                    false
                 }
             }
         }
@@ -842,11 +842,11 @@ mod strref {
                 Some(ge) => {
                     (*out).with_str(ge);
                     (*s).with_str(ge_iter.as_str());
-                    return true;
+                    true
                 }
                 None => {
                     *s = StrRef::null();
-                    return false;
+                    false
                 }
             }
         }
@@ -920,7 +920,7 @@ mod utf8char {
     }
 
     pub unsafe extern "C" fn from_i64(n: i64) -> u32 {
-        match u32::try_from(n).ok().and_then(|n| char::from_u32(n)) {
+        match u32::try_from(n).ok().and_then(char::from_u32) {
             Some(c) => c as u32,
             None => n.clamp(0, 0xffff_ffff) as _,
         }
@@ -955,11 +955,11 @@ mod utf8char {
     }
 
     pub unsafe extern "C" fn is_alphabetic(n: u32) -> bool {
-        char::from_u32(n).map_or(false, |c| c.is_alphabetic())
+        char::from_u32(n).is_some_and(|c| c.is_alphabetic())
     }
 
     pub unsafe extern "C" fn is_numeric(n: u32) -> bool {
-        char::from_u32(n).map_or(false, |c| c.is_numeric())
+        char::from_u32(n).is_some_and(|c| c.is_numeric())
     }
 
     pub unsafe extern "C" fn is_math(n: u32) -> bool {
@@ -1308,7 +1308,7 @@ mod index {
             }
 
             (*out).with_str((&*entry).levels[n].1.as_str());
-            return true;
+            true
         }
     }
 
@@ -1332,7 +1332,7 @@ mod index {
                 Some(s) => (*out).with_str(s),
                 None => (*out).clear(),
             }
-            return true;
+            true
         }
     }
 
@@ -1358,7 +1358,7 @@ mod index {
                     (*o2).with_str(&end.1);
                 }
             }
-            return true;
+            true
         }
     }
 
@@ -1372,13 +1372,13 @@ mod index {
                     if page.0.is_empty() {
                         return 0;
                     }
-                    return 1;
+                    1
                 }
                 MergedPage::Range { start, end, .. } => {
                     if start.0.is_empty() || end.0.is_empty() {
                         return 0;
                     }
-                    return (1 + end.0.last().unwrap().value - start.0.last().unwrap().value) as _;
+                    (1 + end.0.last().unwrap().value - start.0.last().unwrap().value) as _
                 }
             }
         }
@@ -1398,7 +1398,7 @@ mod index {
                 break;
             }
         }
-        return len;
+        len
     }
 }
 
@@ -1458,11 +1458,11 @@ mod data {
     }
 
     pub unsafe extern "C" fn has_han_data(c: u32) -> bool {
-        char::from_u32(c).and_then(|c| cjk_info(c)).is_some()
+        char::from_u32(c).and_then(cjk_info).is_some()
     }
 
     pub unsafe extern "C" fn han_data(c: u32, out: *mut CjkInfo) -> bool {
-        match char::from_u32(c).and_then(|c| cjk_info(c)) {
+        match char::from_u32(c).and_then(cjk_info) {
             Some(i) => {
                 unsafe {
                     out.replace(i);
@@ -1584,7 +1584,7 @@ mod data {
             };
             (*out).ptr = c.0.as_ptr();
             (*out).len = c.0.len();
-            return true;
+            true
         }
     }
 
@@ -1626,7 +1626,7 @@ mod data {
             let Some(s) = StrRef { ptr, len }.as_str() else {
                 return -2;
             };
-            if s.chars().any(|c| c < '1' || c > '5') {
+            if s.chars().any(|c| !('1'..='5').contains(&c)) {
                 return -2;
             }
             let OrderedStrokes { ptr, len } = *ordered_strokes;

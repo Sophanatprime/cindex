@@ -22,6 +22,14 @@
     \cs_set_protected:Npn \__cndd_verbatim_font_hook:
       { \ltjsetparameter { autospacing = false , autoxspacing = false } }
   }
+\sys_if_engine_uptex:T
+  {
+    \cs_set_protected:Npn \__cndd_verbatim_font_hook:
+      { \noautospacing \noautoxspacing }
+  }
+
+\cs_new_protected:Npn \V #1
+  { \texttt { \__cndd_verbatim_font_hook: \Verbatimize {#1} } }
 
 \newenvironment{typelua}
   {\list{}{%
@@ -196,6 +204,7 @@
                 \cs_if_exist:cT { __cndd_char_brace_ \__cndd_cc: _tl }
                   { \__cndd_print_op: }
                 \tl_put_right:Nn \l__cndd_op_tl { #1 }
+                \__cndd_check_special_op:
               }
           }
           {
@@ -208,6 +217,36 @@
               { \__cndd_print_ident: \__cndd_print_op: #1 }
           }
       }
+  }
+\prop_new_linked:N \l__cndd_special_op_prop
+\prop_put:Nnn \l__cndd_special_op_prop { -- } { \__cndd_scan_comment:n }
+\prop_put:Nnn \l__cndd_special_op_prop { [[ } { \__cndd_scan_raw_string:nn { 0 } }
+\prop_put:Nnn \l__cndd_special_op_prop { [=[ } { \__cndd_scan_raw_string:nn { 1 } }
+\prop_put:Nnn \l__cndd_special_op_prop { [==[ } { \__cndd_scan_raw_string:nn { 2 } }
+\tl_new:N \l__cndd_special_op_do_tl
+\cs_new_eq:NN \__cndd_special_op_do:w ?
+\cs_new_protected:Npn \__cndd_check_special_op: #1
+  {
+    \prop_get:NVNTF \l__cndd_special_op_prop \l__cndd_op_tl \l__cndd_special_op_do_tl
+      { \l__cndd_special_op_do_tl {#1} } {#1}
+  }
+\cs_new_protected:Npn \__cndd_scan_comment:n #1 #2 \q_recursion_tail \q_recursion_stop
+  { { \color[gray]{0.5} \__cndd_print_op: #2 } \tl_clear:N \l__cndd_op_tl }
+\tl_new:N \l__cndd_scan_str_tl
+\cs_new_protected:Npn \__cndd_scan_raw_string:nn #1 #2 #3 \q_recursion_tail
+  {
+    \tl_set:Ne \l__cndd_scan_str_tl { ] \prg_replicate:nn {#1} { = } ] }
+    \tl_if_in:nVTF {#3} \l__cndd_scan_str_tl
+      {
+        \exp_args:NnV \use:nn
+          { \cs_set:Npn \__cndd_special_op_do:w ##1 } \l__cndd_scan_str_tl ##2 \q_nil
+          {
+            { \color{red!60!yellow} \__cndd_print_op: ##1 } \tl_clear:N \l__cndd_op_tl
+            #2 ##2 \q_recursion_tail
+          }
+        \__cndd_special_op_do:w #3 \q_nil
+      }
+      { \__cndd_print_op: #2 #3 \q_recursion_tail }
   }
 \cs_new_protected:Npn \__cndd_scan_tok:N #1
   {

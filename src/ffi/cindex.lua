@@ -872,7 +872,7 @@ local index_entry_array_mt = {
                 __api.index._indices_push_boxed_entry(arr_ptr, entry.inner);
             elseif type(entry) == "table" then
                 __api.index._indices_push_boxed_entry(arr_ptr, IndexEntryRefMut(entry).inner);
-            elseif entry == false then
+            elseif type(entry) == "boolean" and entry == false then
                 -- pass
             else
                 error("invalid return value of parse_index_line, except IndexEntryRefMut|table, got " .. type(entry));
@@ -1238,9 +1238,9 @@ CjkInfo = ffi.metatype("CjkInfo", {
         radical_from_kind = function (kind)
             local res;
             if ffi.istype(StrRef, kind) then
-                res = __api.data.radical_from_kind(kind.ptr, kind.len);
+                res = __api.data.kx_radical_from_kind(kind.ptr, kind.len);
             elseif type(kind) == "string" then
-                res = __api.data.radical_from_kind(kind, #kind);
+                res = __api.data.kx_radical_from_kind(kind, #kind);
             else
                 error("invalid argument type for CjkInfo.radical_from_kind, except StrRef|string");
             end
@@ -2726,6 +2726,8 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
     local radical_simplified_delimiter = output_style:radical_simplified_delimiter();
     local radical_simplified_suffix = output_style:radical_simplified_suffix();
 
+    local index = 0;
+
     local write_a_page_range = function (span, commands, l, r)
         if not l then return end
         local replace_r = nil;
@@ -2776,7 +2778,7 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
         for idx = 0, pages_len - 1 do
             local page_span = entry:page_span_n(idx);
             if page_span == 0 then
-                Logger.warn("empty page value");
+                Logger.warn("empty page value in entry " .. index);
                 goto continue;
             end
             if idx ~= 0 then check_write(delim_n) end
@@ -2799,6 +2801,7 @@ _G.__cindex_write_entries = _G.__cindex_write_entries or function (buf, group_ta
 
         for i, entry in ipairs(entries) do
             entry = ffi.new(MergedEntryRef, ffi.cast(voidptr_t, entry));
+            index = index + 1;
 
             if i == 1 then
                 max_same_key = 0;

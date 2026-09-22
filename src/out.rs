@@ -69,7 +69,7 @@ impl Record {
             },
             style.arg_close,
             style.arg_open,
-            &self.page_tuple.1,
+            self.page_tuple.1,
             style.arg_close,
         )
     }
@@ -176,10 +176,10 @@ impl<'s, F: Fn(&[IndexPage], &[IndexPage]) -> Ordering> MergedPagesBuilder<'s, F
             curr_start: &[IndexPage],
         ) -> bool {
             let cmp = page_cmp(prev_end, curr_start);
-            if cmp == Ordering::LessSame {
-                if let (Some(pe), Some(cs)) = (prev_end.last(), curr_start.last()) {
-                    return pe.as_u64() + 1 == cs.as_u64();
-                }
+            if cmp == Ordering::LessSame
+                && let (Some(pe), Some(cs)) = (prev_end.last(), curr_start.last())
+            {
+                return pe.as_u64() + 1 == cs.as_u64();
             }
             false
         }
@@ -555,8 +555,8 @@ pub fn get_page_cmp(prec_table: Precedence) -> Box<dyn Fn(&[IndexPage], &[IndexP
         match lhs.len().cmp(&rhs.len()) {
             StdOrdering::Less => Ordering::LessOther,
             StdOrdering::Equal => {
-                let l = page_into(&lhs.last().unwrap());
-                let r = page_into(&rhs.last().unwrap());
+                let l = page_into(lhs.last().unwrap());
+                let r = page_into(rhs.last().unwrap());
                 match l.cmp(&r) {
                     StdOrdering::Less if l.0 == r.0 => Ordering::LessSame,
                     StdOrdering::Less => Ordering::LessOther,

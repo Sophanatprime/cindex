@@ -88,6 +88,7 @@ end
 local function parse_indices_string(file_path, lines, _is_ikv)
     local lines_f = lines:lines();
     local g_envs = {};
+    local lua_code = string_buffer.new();
     local function read_lines ()
         local line = lines_f();
         if line == nil then
@@ -127,19 +128,18 @@ local function parse_indices_string(file_path, lines, _is_ikv)
             name = name:sub(1, from_s - 1);
         end
 
+        lua_code:reset();
         len = tonumber(tostring(len));
-        local lua_code = string_buffer.new();
         for _ = 1, len do
-            lua_code:put(lines_f());
+            lua_code:put(tostring(lines_f()));
             lua_code:put('\n');
         end
 
         id = tostring(id);
-        lua_code = tostring(lua_code);
         assert(res:push_level(id, id));
         assert(res:push_level(name, name));
 
-        local ok, eval_res = exec_luacode(lua_code, name, g_envs[env_from] or new_env());
+        local ok, eval_res = exec_luacode(tostring(lua_code), name, g_envs[env_from] or new_env());
         if not ok then error(eval_res) end
         assert(res:push_level(digest.md5(eval_res), display(eval_res)));
         return res;

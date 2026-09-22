@@ -125,11 +125,11 @@ pub trait PrecedenceProvider {
         ];
         let mut present = pos_table
             .iter()
-            .filter_map(|s| s.1.and_then(|i| Some((s.0, i))))
+            .filter_map(|s| s.1.map(|i| (s.0, i)))
             .collect::<SmallVec<[(usize, usize); 7]>>();
         present.sort_by_key(|i| i.1);
         pos_table.iter().for_each(|s| {
-            if matches!(s.1, None) {
+            if s.1.is_none() {
                 present.push((s.0, 255));
             }
         });

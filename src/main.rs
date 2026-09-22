@@ -12,9 +12,9 @@ use cindex::{
 use clap::{Parser, Subcommand, ValueEnum};
 use compact_str::CompactString;
 use rustc_hash::FxHashMap;
+use serde::Serialize;
 
 use mimalloc::MiMalloc;
-use serde::Serializer;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -84,7 +84,7 @@ fn main() {
                 text,
             } => {
                 if *escaped {
-                    process_query(kind, &*normalize_unicode_escape(text));
+                    process_query(kind, &normalize_unicode_escape(text));
                 } else {
                     process_query(kind, text)
                 }
@@ -115,8 +115,10 @@ fn normalize_unicode_escape(mut s: &str) -> std::borrow::Cow<'_, str> {
             match memchr::memchr(b'}', s.as_bytes()) {
                 Some(idx) => {
                     let n = u32::from_str_radix(&s[1..idx], 16)
-                        .expect(&format!("invalid number: {}", &s[1..idx]));
-                    res.push(char::from_u32(n).expect(&format!("invalid char: U+{:04X}", n)));
+                        .unwrap_or_else(|_| panic!("invalid number: {}", &s[1..idx]));
+                    res.push(
+                        char::from_u32(n).unwrap_or_else(|| panic!("invalid char: U+{:04X}", n)),
+                    );
                     s = &s[idx + 1..];
                 }
                 None => {
@@ -127,8 +129,8 @@ fn normalize_unicode_escape(mut s: &str) -> std::borrow::Cow<'_, str> {
             }
         } else {
             let n = u32::from_str_radix(&s[..4.min(s.len())], 16)
-                .expect(&format!("invalid number: {}", &s[..4.min(s.len())]));
-            res.push(char::from_u32(n).expect(&format!("invalid char: U+{:04X}", n)));
+                .unwrap_or_else(|_| panic!("invalid number: {}", &s[..4.min(s.len())]));
+            res.push(char::from_u32(n).unwrap_or_else(|| panic!("invalid char: U+{:04X}", n)));
             s = &s[4.min(s.len())..];
         }
     }
@@ -359,7 +361,7 @@ fn process_query(kind: &QueryKind, text: &str) {
                             }
                         }
                     }
-                    println!("");
+                    println!();
                 }
             }
         } else {
@@ -374,22 +376,22 @@ fn process_query(kind: &QueryKind, text: &str) {
 fn process_make_index(args: &Cli) -> anyhow::Result<()> {
     let ist_path = args.style.as_ref().map(|s| {
         let p = Path::new(s);
-        if matches!(p.extension(), None) {
+        if p.extension().is_none() {
             p.with_extension("ist")
         } else {
             p.to_path_buf()
         }
     });
     let ist_path_handle = std::thread::spawn(move || {
-        ist_path.and_then(|p| {
+        ist_path.map(|p| {
             if p.exists() {
-                Some(p)
+                p
             } else {
-                Some(PathBuf::from(
+                PathBuf::from(
                     cindex::ffi::kpse_find_file(&p, false)
-                        .expect(&format!("unable to find style file: {}", p.display()))
-                        .expect(&format!("unable to find style file: {}", p.display())),
-                ))
+                        .unwrap_or_else(|_| panic!("unable to find style file: {}", p.display()))
+                        .unwrap_or_else(|| panic!("unable to find style file: {}", p.display())),
+                )
             }
         })
     });
@@ -407,14 +409,14 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
                 let real_path = match cindex::ffi::kpse_find_file(&path, false) {
                     Ok(Some(path)) => path,
                     _ => cindex::ffi::kpse_find_file(path.with_extension("idx"), false)
-                        .expect(&format!("unable to find input file: {}", path.display()))
-                        .expect(&format!("unable to find input file: {}", path.display())),
+                        .unwrap_or_else(|_| panic!("unable to find input file: {}", path.display()))
+                        .unwrap_or_else(|| panic!("unable to find input file: {}", path.display())),
                 };
                 tx.send((idx, PathBuf::from(real_path))).unwrap();
             } else {
                 let real_path = cindex::ffi::kpse_find_file(&path, false)
-                    .expect(&format!("unable to find input file: {}", path.display()))
-                    .expect(&format!("unable to find input file: {}", path.display()));
+                    .unwrap_or_else(|_| panic!("unable to find input file: {}", path.display()))
+                    .unwrap_or_else(|| panic!("unable to find input file: {}", path.display()));
                 tx.send((idx, PathBuf::from(real_path))).unwrap();
             }
         });
@@ -434,11 +436,7 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
         if ignore_len != 0 {
             let kpet_len = buf.len() - ignore_len;
             unsafe {
-                std::ptr::copy(
-                    buf.as_mut_ptr().offset(ignore_len as _),
-                    buf.as_mut_ptr(),
-                    kpet_len,
-                );
+                std::ptr::copy(buf.as_mut_ptr().add(ignore_len), buf.as_mut_ptr(), kpet_len);
             };
             buf.truncate(kpet_len);
         }
@@ -488,7 +486,7 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
             } else {
                 (
                     IstFile::read(&path)
-                        .expect(&format!("unable to read ist file: {}", path.display())),
+                        .unwrap_or_else(|_| panic!("unable to read ist file: {}", path.display())),
                     None,
                 )
             }
@@ -551,9 +549,9 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
             "table_to_json",
             lua.create_function::<_, LuaTable, Value>(|lua, tab| {
                 let Ok(json_text) = serde_json::to_string_pretty(&tab) else {
-                    return Err(cindex::ffi::lua::Error::SerializeError(format!(
-                        "erroneous calling table.to_json"
-                    )));
+                    return Err(cindex::ffi::lua::Error::SerializeError(
+                        "erroneous calling table.to_json".to_string(),
+                    ));
                 };
                 lua.create_string(json_text.as_bytes())
                     .map(LuaValue::String)
@@ -561,14 +559,16 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
         )?;
         c_funcs_api.raw_set(
             "value_from_json",
-            lua.create_function::<_, LuaString, Value>(|lua, tab| {
-                let ser = cindex::ffi::lua::serde::ser::Serializer::new(lua);
-                let Ok(value) = ser.serialize_bytes(&tab.as_bytes()) else {
-                    return Err(cindex::ffi::lua::Error::SerializeError(format!(
-                        "erroneous calling value_from_json"
-                    )));
+            lua.create_function::<_, LuaString, Value>(|lua, s| {
+                let Ok(value) = serde_json::from_str::<'_, serde_json::Value>(&s.to_string_lossy())
+                else {
+                    return Err(cindex::ffi::lua::Error::SerializeError(
+                        "erroneous calling value_from_json".to_string(),
+                    ));
                 };
-                Ok(value)
+                println!("{:?}", value);
+                let ser = cindex::ffi::lua::serde::Serializer::new(lua);
+                value.serialize(ser)
             })?,
         )?;
         lua.globals().raw_set("__c_function_api", c_funcs_api)?;
@@ -628,21 +628,20 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
     }
 
     let raw_len = entries.len();
-    if raw_len == 0 {
-        if let Ok(emptiness_fallback) = lua
+    if raw_len == 0
+        && let Ok(emptiness_fallback) = lua
             .globals()
             .raw_get::<LuaFunction>("__cindex_reading_empty")
             .inspect_err(|e| {
                 log::error!(target: "cindex", "{e}");
             })
-        {
-            emptiness_fallback
-                .call::<()>(&mut entries as *mut _ as i64)
-                .inspect_err(|e| {
-                    log::error!(target: "cindex", "{e}");
-                })
-                .ok();
-        }
+    {
+        emptiness_fallback
+            .call::<()>(&mut entries as *mut _ as i64)
+            .inspect_err(|e| {
+                log::error!(target: "cindex", "{e}");
+            })
+            .ok();
     }
     let len_after_re_reading = entries.len();
 

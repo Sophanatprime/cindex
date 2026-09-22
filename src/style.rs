@@ -96,15 +96,13 @@ impl IndexEntry {
         let mut pages_raw = String::new();
 
         loop {
-            if state == Kind::Page {
-                if input.skip_str(&ist.page_compositor) {
-                    let page = IndexPage::from_str(&page_str)?;
-                    pages_raw.push_str(&page_str);
-                    pages_raw.push_str(&ist.page_compositor);
-                    pages.push(page);
-                    page_str.clear();
-                    continue;
-                }
+            if state == Kind::Page && input.skip_str(&ist.page_compositor) {
+                let page = IndexPage::from_str(&page_str)?;
+                pages_raw.push_str(&page_str);
+                pages_raw.push_str(&ist.page_compositor);
+                pages.push(page);
+                page_str.clear();
+                continue;
             }
 
             let curr_chr = input.get()?;
@@ -675,7 +673,7 @@ impl IstFile {
     pub fn read(path: impl AsRef<Path>) -> Result<IstFile> {
         let path = path.as_ref();
         let mut ist_file = IstFile::default();
-        parse_ist_string(&mut ist_file, &std::fs::read_to_string(&path)?)?;
+        parse_ist_string(&mut ist_file, &std::fs::read_to_string(path)?)?;
         Ok(ist_file)
     }
 
@@ -751,7 +749,7 @@ impl IstFile {
 }
 
 fn parse_ist_string(ist: &mut IstFile, ist_content: &str) -> Result<()> {
-    let ref mut input = ist_content.trim_ascii_start();
+    let input = &mut ist_content.trim_ascii_start();
 
     while !input.is_empty() {
         let len = memchr3(b'\n', b'\t', b' ', input.as_bytes()).unwrap_or(input.len());
@@ -847,7 +845,7 @@ fn parse_ist_string(ist: &mut IstFile, ist_content: &str) -> Result<()> {
                     b'+' | b'-' => {
                         scan_number(input)?;
                     }
-                    b @ _ => {
+                    b => {
                         if b.is_ascii_digit() {
                             scan_number(input)?;
                         } else {
@@ -1042,13 +1040,13 @@ fn scan_char(input: &mut &str) -> Result<char> {
                 'v' => ('\u{0B}', 1),
                 'u' | 'x' => (scan_escaped_char(input)?, 0),
                 '0' => ('\0', 1),
-                c @ _ if c.is_ascii_alphanumeric() => {
+                c if c.is_ascii_alphanumeric() => {
                     bail!(
                         "escaped character cannot be an ASCII number or alphabetic: {}",
                         raw_input
                     );
                 }
-                c @ _ => (c, c.len_utf8()),
+                c => (c, c.len_utf8()),
             };
             *input = &input[len..];
             c

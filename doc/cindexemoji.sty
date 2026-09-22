@@ -7,7 +7,18 @@
   }
 
 \RequirePackage{scalerel}
-\cs_new_protected:Npn \__cnemj_insert:n #1
+\cs_new_nopar:Npn \__cnemj_insert:n #1 { \__cnemj_insert_hwemoji_assets:n {#1} }
+\cs_new_protected:Npn \cnemj_set_insert_function:nn #1 #2
+  {
+    \cs_if_exist:cTF { __cnemj_insert_ #1 :n }
+      { \msg_error:nnn { cindexemoji } { duplicated-function } {#1} }
+      {
+        \cs_set_protected_nopar:cpn { __cnemj_insert_ #1 :n } ##1 {#2}
+        \cs_set_nopar:Npx \__cnemj_insert:n ##1
+          { \cs:w __cnemj_insert_ #1 :n \cs_end: {##1} }
+      }
+  }
+\cnemj_set_insert_function:nn { hwemoji-assets }
   { {\scalerel*{\includegraphics[page=#1]{hwemoji-assets.pdf}}{X}} }
 
 \tl_new:N \l__cnemj_collect_tl
@@ -19,6 +30,8 @@
 \msg_new:nne { cindexemoji } { ignore }
   { Definition~ of~ emoji~ sequence~ `#1'= \c_hash_str #2~ has~ been~ ignored. }
 \msg_new:nnn { cindexemoji } { unknown } { Unknown~ emoji~ sequence~ `#1'. }
+\msg_new:nnn { cindexemoji } { duplicated-function }
+  { Emoji~function~`#1'~has~been~defined. }
 
 \cs_new_eq:NN \__cnemj_declare_auxb:w ?
 \cs_new_eq:NN \__cnemj_declare_auxc:w ?
@@ -28,20 +41,25 @@
       { \__cnemj_insert:n { \int_use:N \l__cnemj_page_int } }
     \__cnemj_declare_root:N #1
   }
+\prg_new_conditional:Npnn \__cnemj_if_in_csname: { TF }
+  { \tex_ifincsname:D \prg_return_true: \else: \prg_return_false: \fi: }
 \cs_new_protected:Npn \__cnemj_declare_root:N #1
   {
     \cs_set_protected_nopar:Npn \__cnemj_declare_auxc:w
       {
-        \int_set:Nn \l__cnemj_prev_int { `#1 }
-        \tl_set:Nn \l__cnemj_collect_tl {#1}
-        \prop_if_exist:cTF { g__cnemj_char_ 0 - \int_use:N \l__cnemj_prev_int _prop }
+        \__cnemj_if_in_csname:TF { \token_to_str:N #1 }
           {
-            % \prop_show:c { g__cnemj_char_ 0 - \int_use:N \l__cnemj_prev_int _prop }
-            \peek_N_type:TF
-              { \__cnemj_check_char:NN #1 }
-              { \__cnemj_check_use:o \l__cnemj_collect_tl }
+            \int_set:Nn \l__cnemj_prev_int { `#1 }
+            \tl_set:Nn \l__cnemj_collect_tl {#1}
+            \prop_if_exist:cTF
+              { g__cnemj_char_ 0 - \int_use:N \l__cnemj_prev_int _prop }
+              {
+                \peek_N_type:TF
+                  { \__cnemj_check_char:NN #1 }
+                  { \__cnemj_check_use:o \l__cnemj_collect_tl }
+              }
+              { \__cnemj_check_use:n {#1} }
           }
-          { \__cnemj_check_use:n {#1} }
       }
     \char_set_catcode_active:n { `#1 }
     \char_set_active_eq:nN { `#1 } \__cnemj_declare_auxc:w

@@ -122,14 +122,13 @@ pub fn radical(s: &str) -> Option<Radical> {
     STR_RADICAL.get(s).copied()
 }
 
-pub fn radical_strs()
--> impl Iterator<Item = &'static &'static str> + DoubleEndedIterator + ExactSizeIterator {
+pub fn radical_strs() -> impl DoubleEndedIterator<Item = &'static &'static str> + ExactSizeIterator
+{
     STR_RADICAL.keys()
 }
 
-pub fn radical_entries() -> impl Iterator<Item = (&'static &'static str, &'static Radical)>
-+ DoubleEndedIterator
-+ ExactSizeIterator {
+pub fn radical_entries()
+-> impl DoubleEndedIterator<Item = (&'static &'static str, &'static Radical)> + ExactSizeIterator {
     STR_RADICAL.entries()
 }
 
@@ -225,7 +224,7 @@ impl RawStrokes {
         }
 
         let byte_idx = index / 2;
-        let is_lower_nibble = index % 2 != 0;
+        let is_lower_nibble = !index.is_multiple_of(2);
         let byte = self.0[byte_idx];
         let stroke = if is_lower_nibble {
             byte & 0x0F
@@ -276,7 +275,7 @@ impl RawStrokesIter {
     #[inline(always)]
     fn get_raw_stroke_at(&self, cursor: usize) -> u8 {
         let byte_idx = cursor / 2;
-        let is_lower_nibble = cursor % 2 != 0;
+        let is_lower_nibble = !cursor.is_multiple_of(2);
         let byte = self.raw[byte_idx];
         if is_lower_nibble {
             byte & 0x0F

@@ -19,6 +19,31 @@
 
 \makeatletter
 \pdfstringdefDisableCommands{\let\textcon\@firstofone}
+
+\NewDocumentCommand{\kw}{s m}{\texttt{#2}%
+  \IfBooleanTF{#1}
+    {\kvindex[docusage]{page={MMMMI-\thepage},page-commands=hdpindex{},
+        key1={格式},display1={格式},key2={关键字},display2={关键字},
+        key3={#2},display3={\texttt{#2}}}}%
+    {\MakeLinkTarget*{#2}\label{kw:#2}%
+      \kvindex[docusage]{page={MMMMI-\thepage},page-commands=hdpindex{usage},
+        key1={格式},display1={格式},key2={关键字},display2={关键字},
+        key3={#2},display3={\texttt{#2}}}}%
+}
+
+\NewDocumentCommand{\about}{s m}{#2%
+  \IfBooleanTF{#1}
+    {\kvindex[docusage]{page={MMMMI-\thepage},page-commands=hdpindex{},
+        key1={格式},display1={格式},key2={概念},display2={概念},
+        key3={#2},display3={#2}}}%
+    {\MakeLinkTarget*{#2}\label{about:#2}%
+      \kvindex[docusage]{page={MMMMI-\thepage},page-commands=hdpindex{usage},
+        key1={格式},display1={格式},key2={概念},display2={概念},
+        key3={#2},display3={#2}}}%
+}
+\def\数字{\about*{数字}}
+\def\字符{\about*{字符}}
+\def\字符串{\about*{字符串}}
 \makeatletter
 
 % \usepackage{minted}
@@ -27,10 +52,22 @@
 \usepackage[luarun]{cindexdoc}
 \usepackage{cindexemoji}
 \newcommand*\LUA{\texorpdfstring{\textcon{lua}}{lua}}
+\newcommand*\LUAJIT{\texorpdfstring{\textcon{luajit}}{luajit}}
+\newcommand\fulltextwidth{\dimexpr\paperwidth-1.7cm*2\relax}
+
+\usepackage{xltabular}
+\usepackage{ragged2e}
+\usepackage{fancyvrb}
 
 \enablecombinedlist
 
 \begin{document}
+
+\title{cindex 索引处理程序}
+\author{Wenjian Chern\thanks{E-mail: longaster@163.com}}
+\startextrawidth{0pt}{\paperwidth-1.7cm*2-\textwidth}
+\maketitle
+\stopextrawidth
 
 \section*{目录}
 \templatecombinedlist
@@ -39,6 +76,345 @@
   [columns=2,outer-sep=0pt,sep=20pt,ragged,
     adj,adj-outer={-\dimexpr\paperwidth-1.7cm*2-\textwidth}]
   {toc}{}
+
+
+\section{简介}
+
+cindex 是通用的索引制作工具，它的作用类似于 makeindex 和 zhmakeindex，功能和用法也和它们相似。但支持使用 \LUA（\LUAJIT~2.1）进行特殊定制。
+
+输入输出的格式可以由 \texttt{ist} 格式确定，但也支持使用 \LUA 文件文件进行定制。
+
+与 makeindex 一样，cindex 默认的输入/输出格式为 \texttt{idx}/\texttt{ind}。此外，cindex 还支持一种特殊的输入格式 \texttt{ikv}，使用这个格式无需对索引条目进行复杂的转义。同时 \texttt{ikv} 完全兼容 \texttt{idx}，也就是说，{\bfseries 一个合法的 \texttt{idx} 文件就是一个合法的 \texttt{ikv} 文件}。
+
+如果没有显式指定，第一个输入文件的主文件名将用于，确定输出文件和日志文件的主文件名，它们并不继承该输入文件的目录。若未找到某输入文件，且该文件没有扩展名，则会加上 \texttt{.idx} 再次寻找。
+目前，cindex 使用 kpsewhich 命令行工具查找相关文件。
+
+不像 zhmakeindex，在没有提供格式文件的情况下，cindex 并\textbf{不}寻找默认的格式文件，而是直接使用程序的默认设置。
+
+cindex 只接受 UTF-8 编码的文件，不论是格式文件，亦或是输入输出文件，必须使用 UTF-8 编码。
+
+
+\subsection{选项说明}
+
+\bigskip
+
+{\catcode`@=11 \catcode`[=\active
+\def[#1]{\hbox{\textnormal{\string[}#1\textnormal{]}}}
+\def\hang#1{\par\noindent\@hangfrom{#1\ }\ignorespaces}
+\raggedright\ttfamily
+
+\hang{cindex}
+  [-c] [-i] [-o \meta{ind}] [-q] [-r] [-s \meta{style}] [-t \meta{log}]
+  [--strict] [-z \meta{sorts}] [--kv]
+  [\meta{index_0} \meta{index_1} ...] [-- \meta{extras}]
+
+\hang{cindex} [-h, --help]
+
+\hang{cindex} [--license]
+
+\hang{cindex} query [-q] \meta{kind} \meta{text}
+
+\hang{cindex} query [-h, --help]
+\par}
+
+\begin{description}
+  \item[\texttt{-c}] 缩索引项排序项前后的空格。默认情况下，排序项中的空格会被保留。此选项对 \texttt{ikv} 格式的索引无效，默认情况下 \texttt{ikv} 格式总是忽略行首空格，保留行末空格。
+  \item[\texttt{-i}] 从标准输入流（stdin）读入索引项。如果使用了该选项，并且没有使用 \texttt{-o} 选项，则排序后的索引将输出到标准输出流（stdout）。
+  \item[\texttt{-i} \meta{ind}] 设置输出索引文件为 \meta{ind}。如果没有指定该选项，默认的输出文件名是第一个输入文件 \meta{index_0} 的主文件名加上 \texttt{.ind} 扩展名。
+  \item[\texttt{-q}] 静默模式，不向标准错误流（stderr）显示信息。默认情况下处理过程与错误信息会同时在 stderr 与日志文件中输出。
+  \item[\texttt{-r}] 禁止隐式页码区间构造，要求页码区间必须使用显式区间符号生成。默认情况下，三个或三个以上连续的页码会自动合并为一个页码区间（如1---5）。
+  \item[\texttt{-s} \meta{style}] 设置 \meta{style} 为格式文件。没有默认值。如果没有扩展名，会使用 \texttt{.ist} 作为扩展名。cindex 会首先在当前目录查找格式文件，如果找不到则调用调用 kpsewhich 命令行工具查找，可使用 \texttt{KPSEWHICH_EXE_FILE} 环境变量设置 kpsewhich 二进制文件的位置。
+  \item[\texttt{-t} \meta{log}] 设置 \meta{log} 为日志文件。默认情况下，会使用第一个输入文件 \meta{index_0} 的主文件名加上 \texttt{.ilg} 扩展名作为日志文件。
+  \item[\texttt{--strict}] 严格区分不同嵌入命令的页码。默认情况下，在页码区间处理时，会将如果页码左区间的嵌入命令与右区间不匹配，会以左区间为准；而如果使用该选项，则要求左右区间的命令类型必须严格匹配。
+  \item[\texttt{-z} \meta{sorts}] 设置分组与排序方式为 \meta{sorts}。由 cindex 直接支持的排序方式包括 pinyin/reading，bihua/stroke，bushou/radical。默认值为 pinyin，即中文按拼音分组排序。
+
+  \meta{sorts} 为以西文逗号分隔的列表。默认情况下，cindex 只检查 \meta{sorts} 的第一项，可使用 \LUA 定制。
+  \item[\texttt{--kv}] 标记输入文件均为 \texttt{ikv} 格式。cindex 会检查输入文件的扩展名，如果扩展名为 \texttt{ikv}，则将其视为 \texttt{ikv} 格式。
+  \item[\texttt{--} \meta{extras}] 输入额外的选项。可由 \LUA 进一步处理。
+\end{description}
+
+如
+\begin{verbatim}
+  cindex -s process.lua index.idx -- some other options
+\end{verbatim}
+则 \meta{extras} 为表 \textcon{\{ "some", "other", "options" \}}。
+
+\subsection{索引项输入语法}
+
+\texttt{idx} 格式的输入文件，其语法和 makeindex/zhmakeindex 别无二致。该格式下，每行一个索引项，允许空行，但不得跨行。
+
+如下是几个索引项的例子：
+
+\begin{verbatim}
+\indexentry{姓名}{15}
+\indexentry{ExplSyntaxOn={\verbatim@font !\verb*&!\ExplSyntaxOn&}|hdpindex{usage}}{MMMMI-6}
+\end{verbatim}
+
+\texttt{ikv} 格式的输入文件，每个索引项分为“头”和“具体层级”两个部分：
+
+\begin{syntax}
+\meta{页码}\meta{分隔符}\meta{Range}\meta{分隔符}\meta{命令}\meta{分隔符}\meta{层级数}
+~~~~\meta{排序键_1}
+~~~~\meta{显示文本_1}
+~~~~\meta{排序键_2}
+~~~~\meta{显示文本_2}
+~~~~...
+\end{syntax}
+
+比如假定使用默认的分隔符 \texttt{,}，上述 \texttt{idx} 格式的输入可改写为
+\begin{verbatim}
+15,,,1
+    姓名
+    姓名
+MMMMI-6,,hdpindex{usage},1
+    ExplSyntaxOn
+    \verbatim@font \verb*&\ExplSyntaxOn&
+\end{verbatim}
+
+值得注意的是，分隔符前后不能有多余的空格（分隔符本身可以包含空格，可以是多个字符），即便排序键和显示文本相同，也不能省略其中任何一个。排序键行和显示文本行行首的空格可以省略，cindex 默认会忽略行首空格。
+
+\texttt{ikv} 格式完全兼容 \texttt{idx} 格式，只把扩展名改为 \texttt{ikv}，而内容本身不做改变，同样也能被 cindex 正确识别。比起 \texttt{idx} 格式，\texttt{ikv} 无需（也不能）做任何转义。在 \texttt{ikv} 中使用 \texttt{idx} 格式的索引项则除外。
+
+在 \LaTeX 中使用时，索引项输入文件一般是在 \LaTeX 编译过程中自动生成的。
+
+
+\section{格式文件}
+
+cindex 除了支持 \pkg{makeindex} 的 \texttt{ist} 格式文件外，还支持使用 \LUA 定制。
+
+\subsection{\texttt{ist} 格式文件}
+
+cindex 支持的 \texttt{ist} 格式文件与标准 \pkg{makeindex} 语法完全相同，内容也基本上相同，同时增加了少量控制中文分组输出的格式，它们大多来源于 \pkg{zhmakeindex}。可以在 cindex 中使用标准 \pkg{makeindex} 的格式文件。
+
+格式文件指明了 \texttt{.idx} 输入文件和最终输入文件的格式。该文件在当前工作目录或在
+TEXMF 树中由 \pkg{kpathsea} 库查找。一个格式文件由一组 \meta{关键字} \meta{属
+性} 的列表组成。\meta{关键字} 分为输出和输出两类。\meta{关键字} \meta{属性} 对可以以任何顺序出现。
+以字符 \verb"%" 开头的行是\about{注释}，
+\meta{属性} 可以有不同的类型，
+\about{字符串}是以任意双引号 \verb|"| 或反引号 \verb|`| 界定的串，
+字符是以单引号 \verb|'| 界定的单个\about{字符}，\about{数字}是一个整数。
+其中，双引号和单引号界定的串和字符，可以使用反斜线 \verb"\" 符号作为\about{转义符}，以得到
+特殊字符或引号本身；而反引号界定的串是表示原始字符串，它不使用转义符。格式文
+件中没有指定的项目会使用其默认值。
+
+\begin{xltabular}{\fulltextwidth}{lll>{\RaggedRight}X}
+\caption{与 \pkg{makeindex} 兼容的输入格式}\label{tab:oldinputstyle} \\
+  \toprule
+  关键字 & 类型 & 默认值 & 意义 \\
+  \midrule
+\endfirsthead
+  \toprule
+  关键字 & 类型 & 默认值 & 意义 \\
+  \midrule
+\endhead
+  \bottomrule
+\endfoot
+  \kw{keyword}  & \字符串 & \V{"\\indexentry"} & 索引关键字 \\
+  \kw{arg_open}  & \字符 & \V{'\{'} & 参数的开定界符 \\
+  \kw{arg_close}  & \字符 & \V{'\}'} & 参数的闭定界符 \\
+  \kw{range_open}  & \字符 & \V{'('} & 页码范围的开定界符 \\
+  \kw{range_close}  & \字符 & \V{')'} & 页码范围的闭定界符 \\
+  \kw{level}  & \字符 & \V{'!'} & 索引项层次分隔符 \\
+  \kw{actual}  & \字符 & \V{'@'} & （区别于排序项的）实际输出项标志符 \\
+  \kw{encap}  & \字符 & \V{'|'} & 页码和特殊命令指示符 \\
+  \kw{quote}  & \字符 & \V{'"'} & 引号（转义符） \\
+  \kw{escape}  & \字符 & \V{'\\'} & 转义 \V{quote} 的符号，在它后面的引号不作转义符
+解释 \\
+  \kw{page_compositor} &  \字符串 & \V{"-"} & 复合页码分隔符 \\
+\end{xltabular}
+
+\begin{xltabular}{\fulltextwidth}{lll>{\RaggedRight\arraybackslash}X}
+\caption{cindex 特有的输入格式}\label{tab:newinputstyle} \\
+  \toprule
+  关键字 & 类型 & 默认值 & 意义 \\
+  \midrule
+\endfirsthead
+  \toprule
+  关键字 & 类型 & 默认值 & 意义 \\
+  \midrule
+\endhead
+  \bottomrule
+\endfoot
+  \kw{comment} & \字符 & \V{'\%'} & \texttt{ist} 格式行注释的开始符 \\
+  \kw{separator} & \字符串 & \V{","} & \texttt{ikv} 格式“头”行的分隔符 \\
+\end{xltabular}
+
+
+\begin{xltabular}{\fulltextwidth}{lll>{\RaggedRight}X}
+\caption{与 \pkg{makeindex} 兼容的输出格式}\label{tab:oldoutputstyle} \\
+  \toprule
+  关键字 & 类型 & 默认值 & 意义 \\
+  \midrule
+\endfirsthead
+\toprule
+关键字 & 类型 & 默认值 & 意义 \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+  \kw{preamble} &  \字符串 & \V{"\\begin{theindex}\n"} & 索引导言代码\\
+  \kw{postamble} &  \字符串 & \V{"\n\n\\end{theindex}\n"} & 索引末尾代码\\
+  \kw{group_skip} &  \字符串 & \V{"\n\n\ \ \\indexspace\n"} & 组间垂直间距\\
+  \kw{headings_flag} &  \数字 & \V{0} & 控制显示分组名标题的旗标\\
+  \kw{heading_prefix} &  \字符串 & \V{""} & 分组名标题的前缀\\
+  \kw{heading_suffix} &  \字符串 & \V{""} & 分组名标题的后缀\\
+  \kw{symhead_positive} &  \字符串 & \V{"Symbols"} & 当旗标 \V{headings_flag} 为正数时，符号的标题\\
+  \kw{symhead_negative} &  \字符串 & \V{"symbols"} & 当旗标 \V{headings_flag} 为负数时，符号的标题\\
+  \kw{numhead_positive} &  \字符串 & \V{"Numbers"} & 当旗标 \V{headings_flag} 为正数时，数字的标题\\
+  \kw{numhead_negative} &  \字符串 & \V{"numbers"} & 当旗标 \V{headings_flag} 为负数时，数字的标题\\
+  \kw{item_0} &  \字符串 & \V{"\n\ \ \\item "} & 第 0 级条目间分隔\\
+  \kw{item_1} &  \字符串 & \V{"\n\ \ \ \ \\subitem "} & 第 1 级条目间分隔\\
+  \kw{item_2} &  \字符串 & \V{"\n\ \ \ \ \ \ \\subsubitem "} & 第 2 级条目间分隔\\
+  \kw{item_01} &  \字符串 & \V{"\n\ \ \ \ \\subitem "} & 第 0/1 级条目间分隔\\
+  \kw{item_x1} &  \字符串 & \V{"\n\ \ \ \ \\subitem "} & 第 0/1 级条目间分隔，其中第 0 级无页码\\
+  \kw{item_12} &  \字符串 & \V{"\n\ \ \ \ \ \ \\subsubitem "} & 第 1/2 级条目间分隔\\
+  \kw{item_x2} &  \字符串 & \V{"\n\ \ \ \ \ \ \\subsubitem "} & 第 1/2 级条目间分隔，其中第 1 级无页码\\
+  \kw{delim_0} &  \字符串 & \V{", "} & 第 0 级条目与页码分隔\\
+  \kw{delim_1} &  \字符串 & \V{", "} & 第 1 级条目与页码分隔\\
+  \kw{delim_2} &  \字符串 & \V{", "} & 第 2 级条目与页码分隔\\
+  \kw{delim_n} &  \字符串 & \V{", "} & 多个页码的分隔\\
+  \kw{delim_r} &  \字符串 & \V{"--"} & 页码范围符号\\
+  \kw{delim_t} &  \字符串 & \V{""} & 将插入到在页码列表末尾。如果页码列表为空，此项无
+  效果。 \\
+  \kw{encap_prefix} &  \字符串 & \V{"\\"} & 页码特殊指令前缀\\
+  \kw{encap_infix} &  \字符串 & \V{"\{"} & 页码特殊指令中缀\\
+  \kw{encap_suffix} &  \字符串 & \V{"\}"} & 页码特殊指令后缀\\
+  \kw{page_precedence} &  \字符串 & \V{"rnaRA"} & 不同类型页码的次序，默认值表示小写
+    罗马、阿拉伯数字、小写字母、大写罗马、大写字母\\
+  \kw{suffix_2p} & \字符串 & \V{""} & 在 2 页的页码范围中代替 \V{delim_r} 和第二个页码\\
+  \kw{suffix_3p} & \字符串 & \V{""} & 在 3 页的页码范围中代替 \V{delim_r} 和后面的页码\\
+  \kw{suffix_mp} & \字符串 & \V{""} & 在更多页的页码范围中代替 \V{delim_r} 和后面的页码\\
+\end{xltabular}
+
+\begin{xltabular}{\fulltextwidth}{lll>{\RaggedRight}X}
+\caption{cindex 特有的输出格式}\label{tab:newoutputstyle} \\
+  \toprule
+  关键字 & 类型 & 默认值 & 意义 \\
+  \midrule
+\endfirsthead
+\toprule
+关键字 & 类型 & 默认值 & 意义 \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+  \kw{stroke_prefix}             & \字符串 & \V{""} & 笔画数前缀 \\
+  \kw{stroke_suffix}             & \字符串 & \V{"\ 画"} & 笔画数后缀 \\
+  \kw{radical_prefix}            & \字符串 & \V{""} & 部首前缀 \\
+  \kw{radical_suffix}            & \字符串 & \V{"部"} & 部首后缀 \\
+  \kw{radical_simplified_flag}   & \数字 & 1 & 是否输出简化部首的标志 \\
+  \kw{radical_simplified_prefix} & \字符串 & \V{"（"} & 简化部首前缀 \\
+  \kw{radical_simplified_delimiter} & \字符串 & \V{"、"} & 多个简化部首间的分隔符 \\
+  \kw{radical_simplified_suffix} & \字符串 & \V{"）"} & 简化部首后缀 \\
+\end{xltabular}
+
+\begin{xltabular}{\fulltextwidth}{lll>{\RaggedRight}X}
+\caption{未实现的输出格式}\label{tab:unsupportedoutputstyle} \\
+  \toprule
+  关键字 & 类型 & 默认值 & 意义 \\
+  \midrule
+\endfirsthead
+\toprule
+关键字 & 类型 & 默认值 & 意义 \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+  \kw{setpage_prefix} &  \字符串 & \V{"\n\ \ \\setcounter\{page\}\{"} & 页码设置前缀\\
+  \kw{setpage_suffix} &  \字符串 & \V{"\}\n"} & 页码设置后缀\\
+  \kw{line_max} &  \数字 & \V{72} & 最大行长度，超出长度会自动折行\\
+  \kw{indent_space} &  \字符串 & \V{"\t\t"} & 自动折行的缩进\\
+  \kw{indent_length} &  \数字 & \V{16} & \kw*{indent_space} 的长度\\
+\end{xltabular}
+
+
+\subsection{使用\LUA 定制}
+
+使用 \LUA 文件（扩展名为 \texttt{lua} 或 \texttt{cilua}）作为格式文件时，该 \LUA 文件必须返回 \textcon{nil} 或表。cindex 会在合适的时候查询这张表的字段。如果相应字段不存在，cindex 会使用默认值。
+
+\begin{luadoc}{parse_indices_string}
+  \begin{luasyntax}
+    parse_indices_string: function(
+   @  file_path: string|nil,
+   @  lines: StrRef,
+   @  iv_ikv: boolean
+    ) -> function() -> IndexEntryRefMut | table | nil | false;
+  \end{luasyntax}
+解析传入文件的内容。此函数应当返回一个迭代器函数，每次调用这个迭代器，都会把它的返回值作为一个结构化的索引条目，直到它返回 \textcon{nil}，如果返回 \textcon{false}，相当于忽略该条目。
+如果函数返回的是表，其结构见 \luaref[IndexEntryRef]{as_table}，否则，应当返回 \luaref{IndexEntryRefMut}。
+\end{luadoc}
+
+\begin{luadoc}{parse_index_line}
+  \begin{luasyntax}
+    parse_index_line: function(line: StrRef)
+   @                -> IndexEntryRefMut | table | false;
+  \end{luasyntax}
+此函数应当解析某个输入行，返回一个结构化的索引条目，如果返回 \textcon{false}，相当于忽略该条目。
+如果函数返回的是表，其结构见 \luaref[IndexEntryRef]{as_table}，否则，应当返回 \luaref{IndexEntryRefMut}。
+
+当它与 \luaref{parse_indices_string} 同时存在时，cindex 只使用 \luaref{parse_indices_string}，因为它覆盖更为广泛。
+\end{luadoc}
+
+\begin{luadoc}{empty_indices_callout}
+  \begin{luasyntax}
+    empty_indices_callout: function(array: IndexEntryArray);
+  \end{luasyntax}
+当初次解析完后，如果没有任何有效的索引项，则调用此函数。
+\end{luadoc}
+
+\begin{luadoc}{page_precedence}
+  \begin{luasyntax}
+    page_precedence: function | { string, .. } | string;
+  \end{luasyntax}
+不同种页码的次序。
+
+页码的种类为 \textcon{"Arabic"(n) | "roman"(r) | "Roman"(R) | "alpha"(a) | "Alpha"(A) | "ZhDigits" | "ZhNumber"}，另见 \luaref[IndexEntryRef]{as_table}。
+如果是以字符串而非以表给出，则字符串的每一项应为括号内的字符。如 \textcon{\{ "roman", "Arabic", "alpha", "Roman", "Alpha", "ZhDigits", "ZhNumber" \}} 和 \textcon{"rnaRA"} 都表示相同的优先级，这也是默认的优先级。如果是函数，则其返回值必须为表或字符串或 \textcon{nil}。
+\end{luadoc}
+
+\begin{luadoc}{group_detect}
+  \begin{luasyntax}
+    group_detect: function(entry: MergedEntryRef) -> string;
+  \end{luasyntax}
+判断并返回条目的组别。
+
+cindex 预定义的组别及其排序为 \texttt{nil}，\texttt{Symbols}，\texttt{Numbers}，\texttt{A} \~{} \texttt{Z}，\texttt{BiHua1} \~{} \texttt{BiHua64}（笔画数 1 至 64，超过 64 画的按 64 画计），\texttt{BuShou1} \~{} \texttt{BuShou214}（214 个康熙部首）。
+\end{luadoc}
+
+\begin{luadoc}{group_compare}
+  \begin{luasyntax}
+    group_compare: function(
+   @  lhs: string,
+   @  rhs: string,
+   @  lhs_counts: number,
+   @  rhs_counts: number,
+    ) -> boolean;
+  \end{luasyntax}
+组别的排序。如果 \texttt{lhs} 要排在 \texttt{rhs} 前面，则返回 \textcon{true}。目前 cindex 使用的是 \LUA 内置的 \textcon{table.sort} 函数，它是不稳定排序。\texttt{lhs_counts} 和 \texttt{rhs_counts} 分别是对应组别在合并后所拥有的条目数。
+\end{luadoc}
+
+\begin{luadoc}{entry_compare}
+  \begin{luasyntax}
+    entry_compare: function(
+   @  lhs: MergedEntryRef,
+   @  rhs: MergedEntryRef,
+   @  group: string,
+    ) -> boolean;
+  \end{luasyntax}
+条目的排序。如果 \texttt{lhs} 要排在 \texttt{rhs} 前面，则返回 \textcon{true}。目前 cindex 使用的是 \LUA 内置的 \textcon{table.sort} 函数，它是不稳定排序。\texttt{group} 为条目所属的组别。
+
+如果不同组别的排序方式不同，也可使用特化的 \texttt{entry_compare_\meta{group}} 函数，比如 \texttt{entry_compare_Numbers} 如果存在，则对于 \texttt{Numbers} 这个组别，在对其条目排序时，会直接使用这个函数作为比较函数。对于按笔画数和部首的组别，除了会检查 \texttt{entry_compare_BiHua2} 这种外，cindex 还检查不带数字的排序函数：\texttt{entry_compare_BiHua}。 cindex 会优先使用更加具体的比较函数。
+\end{luadoc}
+
+\begin{luadoc}{output_style}
+  \begin{luasyntax}
+    output_style: { .. }
+  \end{luasyntax}
+当使用 \LUA 作为格式文件时，便无法同时使用 \texttt{ist} 格式了。为此，可使用 \texttt{output_style} 表作为替代。这张表的字段就是 \texttt{ist} 中的相应关键字。
+
+可用的关键字见\cref{tab:oldoutputstyle} 和\cref{tab:newoutputstyle}。
+\end{luadoc}
+
 
 \section{\LUA 类型}\label{sec:lua-types}
 
@@ -385,7 +761,8 @@ print(#"L", StrRef.unsafe_new("L"):is_emoji());
 \end{luadoc*}
 
 \begin{luarun}{}
-  print(true)
+print(CjkInfo.radical_from_kind("13"));
+print(CjkInfo.radical_from_kind("213''"));
 \end{luarun}
 
 \begin{luadoc*}{}
@@ -400,6 +777,13 @@ print(#"L", StrRef.unsafe_new("L"):is_emoji());
 判断字符是否有 CJK 信息。它与 \luaref[Char]{has_han_info} 完全一致。
 \end{luadoc*}
 
+\begin{luarun}{}
+print(CjkInfo.contains_char('L'));
+print(CjkInfo.contains_char('汉'));
+print(CjkInfo.contains_char(0x4E00));
+print(CjkInfo.contains_char(0xDFFF));
+\end{luarun}
+
 \begin{luadoc*}{}
 # kx_radical_char
 ! CjkInfo.kx_radical_char(self) -> Char;
@@ -412,11 +796,21 @@ print(#"L", StrRef.unsafe_new("L"):is_emoji());
 返回康熙部首的具体字符，这字符位于 Unicode 的 CJK 表意字相关区块。所有康熙部首及其变体在表意字区块都有对应值，因此有效的 \luaref{CjkInfo} 总返回有效的字符。
 \end{luadoc*}
 
+\begin{luarun}{}
+print(Char('汉'):han_info():kx_ideography_char());
+print(Char('龙'):han_info():kx_ideography_char());
+\end{luarun}
+
 \begin{luadoc*}{}
 # kangxi_radical_number
 ! CjkInfo.kangxi_radical_number(self) -> number | nil;
 返回康熙部首的号码，目前的返回值为 1 \~{} 214。
 \end{luadoc*}
+
+\begin{luarun}{}
+print(Char('汉'):han_info():kangxi_radical_number());
+print(Char('龙'):han_info():kangxi_radical_number());
+\end{luarun}
 
 \begin{luadoc*}{}
 # kangxi_radical_ideography_slot
@@ -428,8 +822,13 @@ print(#"L", StrRef.unsafe_new("L"):is_emoji());
 \begin{luadoc*}{}
 # kx_radical_kind
 ! CjkInfo.kx_radical_kind(self) -> StrRef | nil;
-返回康熙部首的字符串表示。由数字和末尾的 0 \~ 3 个 \textcon{'} 组成。
+返回康熙部首的字符串表示。由数字和末尾的 0 \~{} 3 个 \textcon{'} 组成。
 \end{luadoc*}
+
+\begin{luarun}{}
+print(Char('汉'):han_info():kx_radical_kind());
+print(Char('龙'):han_info():kx_radical_kind());
+\end{luarun}
 
 \begin{luadoc*}{}
 # ucd_additional_strokes
@@ -461,6 +860,11 @@ print(#"L", StrRef.unsafe_new("L"):is_emoji());
 如果该字符有拼音信息，第一个返回值是它最常见的拼音，第二个返回值是它的声调。
 \end{luadoc*}
 
+\begin{luarun}{}
+print(Char('汉'):han_info():mandarin());
+print(Char('长'):han_info():mandarin());
+\end{luarun}
+
 \begin{luadoc*}{}
 # cantonese
 ! CjkInfo.cantonese(self) -> nil | (StrRef, number);
@@ -485,11 +889,26 @@ print(#"L", StrRef.unsafe_new("L"):is_emoji());
 返回 emoji 的名称。一般情况下该方法不会返回 \textcon{nil}。
 \end{luadoc*}
 
+\begin{luarun}{}
+print(Emoji('😂'), Emoji('😂'):name());
+print(Emoji('🇨🇳'), Emoji('🇨🇳'):name());
+print(Emoji('🤦🏻‍♀️'), Emoji('🤦🏻‍♀️'):name());
+print(Emoji('👩🏻‍❤️‍💋‍👨🏻'), Emoji('👩🏻‍❤️‍💋‍👨🏻'):name());
+\end{luarun}
+
 \begin{luadoc*}{}
 # group
 ! Emoji.group(self) -> number;
 返回 emoji 组别的内部表示。可使用 \luaref[icu.table]{EmojiGroup} 获取组别的名字。
 \end{luadoc*}
+
+\begin{luarun}{}
+local icu_data = require("icu.table").EmojiGroup;
+print(Emoji('😂'), icu_data[ Emoji('😂'):group() ]);
+print(Emoji('🇨🇳'), icu_data[ Emoji('🇨🇳'):group() ]);
+print(Emoji('🤦🏻‍♀️'), icu_data[ Emoji('🤦🏻‍♀️'):group() ]);
+print(Emoji('👩🏻‍❤️‍💋‍👨🏻'), icu_data[ Emoji('👩🏻‍❤️‍💋‍👨🏻'):group() ]);
+\end{luarun}
 
 \begin{luadoc}[global]{OrderedStrokes}
 汉字的笔画。
@@ -845,14 +1264,36 @@ cindex 提供的实用模块。
 \begin{luadoc*}{CIndex.Util}
 # table_to_json_string
 ! CIndex.Util.table_to_json_string(table) -> string;
-把表转为 JSON 字符串。
+把表转为 JSON 字符串。表中只能有 \LUA 基本类型，并且有一定限制。
 \end{luadoc*}
+
+\begin{luarun}{}
+local tab = {
+    ["true"] = 114,
+    ["5.14"] = { false },
+};
+print(CIndex.Util.table_to_json_string(tab));
+\end{luarun}
 
 \begin{luadoc*}{CIndex.Util}
 # value_from_json_string
 ! CIndex.Util.value_from_json_string(string) -> ??;
 把 JSON 字符串转为某个 \LUA 基本类型。
 \end{luadoc*}
+
+\begin{luarun}{}
+local s = [=[
+    {
+      "true": 114,
+      "5.14": [ false ]
+    }
+]=];
+local res = CIndex.Util.value_from_json_string(s);
+print(
+    type(res),
+    type(res) == "table" and CIndex.Util.table_to_json_string(res)
+);
+\end{luarun}
 
 \begin{luadoc*}{CIndex.Ideographic}
 # group_by_pinyin, group_by_bihua, group_by_bushou
@@ -919,12 +1360,27 @@ cindex 对其做了简单封装。
 检查 \textcon{subject} 是否匹配正则表达式。
 \end{luadoc*}
 
+\begin{luarun}{}
+local re = Regex([==[\w?\d+\p{Script=Han}]==]);
+print(re:is_match("我114514谁？"));
+print(re:is_match("T114514谁？"));
+print(re:is_match("T114514L"));
+\end{luarun}
+
 \begin{luadoc*}{}
 # find
 ! Regex.find(self, subject: StrRef, start_pos: number) -> StrRef | nil;
 ! Regex.find(self, subject: string, start_pos: number) -> string | nil;
 从字符串的 \textcon{start_pos} 位置开始，查找匹配该的正则表达式的子串并返回。不论是 \luaref{StrRef} 还是 \textcon{string}，索引均从 0 开始。
 \end{luadoc*}
+
+\begin{luarun}{}
+-- 可选匹配“字母”，然后是多个数字，然后是具有属性 Script=Han 的字符
+local re = Regex([==[\pL?\d+\p{Script=Han}]==]);
+print(re:find("999我辈456子"));
+print(re:find("999我辈456子", 3));
+print(re:find("我456"));
+\end{luarun}
 
 \begin{luadoc*}{}
 # captures
@@ -935,12 +1391,31 @@ cindex 对其做了简单封装。
 查找并返回字符串的捕获组。第 0 个索引是匹配的子串。
 \end{luadoc*}
 
+\begin{luarun}{}
+local function print_value(value)
+    if type(value) == "table" then
+        print("{");
+        for k, v in pairs(value) do
+            print(" ", k, "=", v);
+        end
+        print("}");
+    else
+        print(value);
+    end
+end
+
+local re = Regex([==[(\pL)?\d+(\p{Script=Han})]==]);
+print_value(re:captures("999我辈456子"));
+print_value(re:captures("999我辈456子", 3));
+print_value(re:captures("我456"));
+\end{luarun}
+
 \begin{luadoc*}{}
 # gmatch
 ! Regex.gmatch(self, subject: StrRef, start_pos: number)
-!@            -> nil | { [number] = StrRef, [string] = StrRef, .. };
+!@  -> function() -> nil | { [number] = StrRef, [string] = StrRef, .. };
 ! Regex.gmatch(self, subject: string, start_pos: number)
-!@            -> nil | { [number] = string, [string] = string, .. };
+!@  -> function() -> nil | { [number] = string, [string] = string, .. };
 返回一个迭代器函数，其返回值依次是匹配的捕获。
 \end{luadoc*}
 
@@ -952,9 +1427,16 @@ cindex 对其做了简单封装。
 !@  replacement: StrRef | string,
 !@  options?: number,
 !@  once?: boolean;
-! ) -> string;
-以正则表达式 \textcon{replacement} 替换 \textcon{subject} 中匹配的内容。
+! ) -> string, number;
+以正则表达式 \textcon{replacement} 替换 \textcon{subject} 中匹配的内容。返回替换后的字符串以及替换次数。
 \end{luadoc*}
+
+\begin{luarun}{}
+local bit = require("bit");
+local re = Regex([==[(\pL)?\d+(\p{Script=Han})]==]);
+print(re:gsub("999我辈456子", "[$2,$1]"));
+print(re:gsub("999我辈456子", "[$2,$1]", nil, true));
+\end{luarun}
 
 \begin{luadoc*}{}
 # Constant
@@ -1071,8 +1553,27 @@ Emoji 的分组。目前共有 9 个组别。
 \end{luadoc*}
 
 
-\subsection{\textcon{digest} 哈希算法}
+\subsection{\textcon{digest} 哈希函数}
 
+cindex 封装了 MD5，Sha2 以及 Blake2 哈希函数。可使用 \textcon{require("digest")} 加载。
+
+\begin{luadoc}[global]{digest}
+  \begin{luasyntax}
+    digest: const table;
+  \end{luasyntax}
+\end{luadoc}
+
+\begin{luadoc*}{}
+# md5, sha256, sha512, blake2b128, blake2b256
+! digest.md5(string) -> string;
+\end{luadoc*}
+
+\begin{luarun}{}
+local digest = require("digest");
+print(digest.md5("Hello, world!"));
+print(digest.sha256("Hello, world!"));
+print(digest.blake2b256("Hello, world!"));
+\end{luarun}
 
 \subsection{\textcon{LPeg}}
 
