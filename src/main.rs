@@ -568,7 +568,6 @@ fn process_make_index(args: &Cli) -> anyhow::Result<()> {
                         "erroneous calling value_from_json".to_string(),
                     ));
                 };
-                println!("{:?}", value);
                 let ser = cindex::ffi::lua::serde::Serializer::new(lua);
                 value.serialize(ser)
             })?,

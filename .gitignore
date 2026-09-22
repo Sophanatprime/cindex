@@ -16,7 +16,6 @@
 *.log
 *.log
 *.gz
-*.cilua
 *.toc
 /doc/test*
 /doc/*.luarun.*

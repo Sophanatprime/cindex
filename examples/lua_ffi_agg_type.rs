@@ -1,4 +1,4 @@
-use cindex::ffi::{lua::prelude::*, LuaModule};
+use cindex::ffi::{LuaModule, lua::prelude::*};
 
 fn main() {
     let lua = unsafe { Lua::unsafe_new() };

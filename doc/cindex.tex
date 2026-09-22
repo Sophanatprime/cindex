@@ -1590,6 +1590,7 @@ cindex 内置了此库的 \texttt{0.7.2} 版，可使用 \textcon{require("argpa
 cindex 支持在 \LUA 格式中解析命令行中传入的额外的参数，可使用此库解析。
 
 \begin{luarun}{}
+-- 假定额外的参数如下
 local extra_options = { "-o", "cindexout.tex", "cindexin.tex" };
 local argparse = require("argparse");
 local parser = argparse("mystyle");
