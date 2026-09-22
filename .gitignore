@@ -1,7 +1,5 @@
 /target
 /.vscode
-/benches
-/examples
 */_minted
 *.aux
 *.glo
@@ -11,6 +9,10 @@
 *.ikv
 *.ilg
 *.ind
+*.zind
+*.cind
+*.kind
+*.mind
 *.log
 *.log
 *.gz
